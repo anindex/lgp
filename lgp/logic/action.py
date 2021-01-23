@@ -1,22 +1,24 @@
 import itertools
 
+from lgp.utils.helpers import frozenset_of_tuples
+
 
 class Action:
     '''
     An Action schema with +/- preconditions and +/- effects.
     This class follows PDDL action schema.
     '''
-    def __init__(self, name, parameters, positive_preconditions, negative_preconditions, add_effects, del_effects, extensions=None):
-        self.name = name
-        self.parameters = parameters
-        self.positive_preconditions = Action.frozenset_of_tuples(positive_preconditions)
-        self.negative_preconditions = Action.frozenset_of_tuples(negative_preconditions)
-        self.add_effects = Action.frozenset_of_tuples(add_effects)
-        self.del_effects = Action.frozenset_of_tuples(del_effects)
+    def __init__(self, **kwargs):
+        self.name = kwargs.get('name', 'unknown')
+        self.parameters = kwargs.get('parameters', [])
+        self.positive_preconditions = frozenset_of_tuples(kwargs.get('positive_preconditions', []))
+        self.negative_preconditions = frozenset_of_tuples(kwargs.get('negative_preconditions', []))
+        self.add_effects = frozenset_of_tuples(kwargs.get('add_effects', []))
+        self.del_effects = frozenset_of_tuples(kwargs.get('del_effects', []))
 
-    def groundify(self, objects, types):
+    def groundify(self, constants, types):
         '''
-        Ground actions with objects (propositional actions)
+        Ground actions with constants (propositional actions)
         '''
         if not self.parameters:
             yield self
@@ -28,8 +30,8 @@ class Action:
             items = []
             while type_stack:
                 t = type_stack.pop()
-                if t in objects:
-                    items += objects[t]
+                if t in constants:
+                    items += constants[t]
                 elif t in types:
                     type_stack += types[t]
                 else:
@@ -54,10 +56,6 @@ class Action:
                 iv += 1
             g.append(pred)
         return g
-
-    @classmethod
-    def frozenset_of_tuples(data):
-        return frozenset([tuple(t) for t in data])
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__

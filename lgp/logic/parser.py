@@ -2,6 +2,9 @@ import logging
 import re
 
 from lgp.logic.action import Action
+from lgp.logic.domain import Domain
+from lgp.logic.problem import Problem
+from lgp.utils.helpers import frozenset_of_tuples
 
 
 class PDDLParser(object):
@@ -11,59 +14,129 @@ class PDDLParser(object):
     logger = logging.getLogger(__name__)
     SUPPORTED_REQUIREMENTS = [':strips', ':negative-preconditions', ':typing']
 
-    def __init__(self):
-        # init variables
-        self.domain_name = 'unknown'
-        self.requirements = []
-        self.types = {}
-        self.objects = {}
-        self.actions = []
-        self.predicates = {}
-
-    def scan_tokens(self, filename):
+    @staticmethod
+    def scan_tokens(filename):
         with open(filename, 'r') as f:
             # Remove single line comments
             content = re.sub(r';.*$', '', f.read(), flags=re.MULTILINE).lower()
         # Tokenize
         stack = []
-        array = []
+        queue = []
         for t in re.findall(r'[()]|[^\s()]+', content):
             if t == '(':
-                stack.append(array)
-                array = []
+                stack.append(queue)
+                queue = []
             elif t == ')':
                 if stack:
-                    temp = array
-                    array = stack.pop()
-                    array.append(temp)
+                    temp = queue
+                    queue = stack.pop()
+                    queue.append(temp)
                 else:
                     raise Exception('Missing open parentheses')
             else:
-                array.append(t)
+                queue.append(t)
         if stack:
             raise Exception('Missing close parentheses')
-        if len(array) != 1:
+        if len(queue) != 1:
             raise Exception('Invalid PDDL expressions! Please check again.')
-        return array[0]
+        return queue[0]
 
-    def parse_action(self, group):
+    @staticmethod
+    def parse_domain(domain_filename):
+        tokens = PDDLParser.scan_tokens(domain_filename)
+        if tokens.pop(0) == 'define':
+            domain = Domain()
+            for group in tokens:
+                t = group.pop(0)  # remove tags
+                if t == 'domain':
+                    domain.name = group[0]
+                elif t == ':requirements':
+                    for req in group:
+                        if req not in PDDLParser.SUPPORTED_REQUIREMENTS:
+                            raise Exception('Requirement ' + req + ' not supported')
+                    domain.requirements = group
+                elif t == ':constants':
+                    domain.constants = PDDLParser.parse_hierarchy(group, t)
+                elif t == ':types':
+                    domain.types = PDDLParser.parse_hierarchy(group, t)
+                elif t == ':predicates':
+                    domain.predicates = PDDLParser.parse_predicates(group)
+                elif t == ':action':
+                    domain.actions.append(PDDLParser.parse_action(group))
+                else:
+                    domain.extensions = PDDLParser.parse_domain_extended(group, t)
+        else:
+            raise Exception('File ' + domain_filename + ' does not match PDDL domain syntax!')
+        return domain
+
+    @staticmethod
+    def parse_domain_extended(group, t):
+        PDDLParser.logger.warn(str(t) + ' is not recognized in domain')
+
+    @staticmethod
+    def parse_problem(problem_filename):
+        tokens = PDDLParser.scan_tokens(problem_filename)
+        if tokens.pop(0) == 'define':
+            problem = Problem()
+            for group in tokens:
+                t = group.pop(0)
+                if t == 'problem':
+                    problem.name = group[0]
+                elif t == ':domain':
+                    problem.domain_name = group[0]
+                elif t == ':requirements':
+                    pass  # Ignore requirements in problem, parse them in the domain
+                elif t == ':objects':
+                    problem.objects = PDDLParser.parse_hierarchy(group, t)
+                elif t == ':init':
+                    PDDLParser.state = frozenset_of_tuples(group)
+                elif t == ':goal':
+                    positive_goals, negative_goals = PDDLParser.split_predicates(group[0], '', 'goals')
+                    problem.positive_goals = frozenset_of_tuples(positive_goals)
+                    problem.negative_goals = frozenset_of_tuples(negative_goals)
+                else:
+                    problem.extensions = PDDLParser.parse_problem_extended(group, t)
+        else:
+            raise Exception('File ' + problem_filename + ' does not match problem pattern')
+        return problem
+
+    @staticmethod
+    def parse_problem_extended(group, t):
+        PDDLParser.logger.warn(str(t) + ' is not recognized in problem')
+
+    @staticmethod
+    def parse_hierarchy(group, name, redefine=False):
+        queue = []
+        structure = {}
+        while group:
+            if not redefine and group[0] in structure:
+                raise Exception('Redefined supertype of ' + group[0])
+            elif group[0] == '-':
+                if not queue:
+                    raise Exception('Unexpected hyphen in ' + name)
+                group.pop(0)
+                typ = group.pop(0)
+                if typ not in structure:
+                    structure[typ] = []
+                structure[typ] += queue
+                queue = []
+            else:
+                queue.append(group.pop(0))
+        if queue:
+            if 'object' not in structure:
+                structure['object'] = []
+            structure['object'] += queue
+        return structure
+
+    @staticmethod
+    def parse_action(group):
         name = group.pop(0)
-        if not type(name) is str:
+        if type(name) is not str:
             raise Exception('Action without name definition')
-        for act in self.actions:
-            if act.name == name:
-                raise Exception('Action ' + name + ' redefined')
-        parameters = []
-        positive_preconditions = []
-        negative_preconditions = []
-        add_effects = []
-        del_effects = []
-        extensions = None
+        action = Action(name=name)
         while group:
             t = group.pop(0)
             if t == ':parameters':
-                if not type(group) is list:
-                    raise Exception('Error with ' + name + ' parameters')
                 parameters = []
                 untyped_parameters = []
                 p = group.pop(0)
@@ -79,24 +152,30 @@ class PDDLParser(object):
                         untyped_parameters.append(t)
                 while untyped_parameters:
                     parameters.append([untyped_parameters.pop(0), 'object'])
+                action.parameters = parameters
             elif t == ':precondition':
-                self.split_predicates(group.pop(0), positive_preconditions, negative_preconditions, name, ' preconditions')
+                positive_preconditions, negative_preconditions = PDDLParser.split_predicates(group.pop(0), name, ' preconditions')
+                action.positive_preconditions, action.negative_preconditions = frozenset_of_tuples(positive_preconditions), frozenset_of_tuples(negative_preconditions)
             elif t == ':effect':
-                self.split_predicates(group.pop(0), add_effects, del_effects, name, ' effects')
+                add_effects, del_effects = PDDLParser.split_predicates(group.pop(0), name, ' effects')
+                action.add_effects, action.del_effects = frozenset_of_tuples(add_effects), frozenset_of_tuples(del_effects)
             else:
-                extensions = self.parse_action_extended(t, group)
-        self.actions.append(Action(name, parameters, positive_preconditions, negative_preconditions, add_effects, del_effects, extensions))
+                action.extensions = PDDLParser.parse_action_extended(group, t)
+        return action
 
-    def parse_action_extended(self, t, group):
+    @staticmethod
+    def parse_action_extended(group, t):
         '''
         This is placeholder function for extensible keywords of actions in PDDL.
         '''
         PDDLParser.logger.warn(str(t) + ' is not recognized in action')
 
-    def parse_predicates(self, group):
+    @staticmethod
+    def parse_predicates(group):
+        predicates = {}
         for pred in group:
             predicate_name = pred.pop(0)
-            if predicate_name in self.predicates:
+            if predicate_name in predicates:
                 raise Exception('Predicate ' + predicate_name + ' redefined')
             arguments = {}
             untyped_variables = []
@@ -112,4 +191,22 @@ class PDDLParser(object):
                     untyped_variables.append(t)
             while untyped_variables:
                 arguments[untyped_variables.pop(0)] = 'object'
-            self.predicates[predicate_name] = arguments
+            predicates[predicate_name] = arguments
+        return predicates
+
+    @staticmethod
+    def split_predicates(group, name, part):
+        negative = []
+        positive = []
+        if group[0] == 'and':
+            group.pop(0)
+        else:
+            group = [group]
+        for predicate in group:
+            if predicate[0] == 'not':
+                if len(predicate) != 2:
+                    raise Exception('Unexpected not in ' + name + part)
+                negative.append(predicate[-1])
+            else:
+                positive.append(predicate)
+        return positive, negative

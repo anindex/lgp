@@ -1,5 +1,4 @@
 import sys
-import pprint
 import argparse
 from os.path import join, dirname, abspath
 
@@ -18,7 +17,7 @@ domain_file = join(DATA_DIR, 'domain_' + args.scenario + '.pddl')
 problem_file = join(DATA_DIR, 'problem_' + args.scenario + '.pddl')
 pddl_parser = PDDLParser()
 print('----------------------------')
-pprint.pprint(pddl_parser.scan_tokens(domain_file))
+print(pddl_parser.parse_domain(domain_file))
 print('----------------------------')
-pprint.pprint(pddl_parser.scan_tokens(problem_file))
+print(pddl_parser.parse_problem(problem_file))
 print('----------------------------')
