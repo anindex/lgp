@@ -89,7 +89,7 @@ class PDDLParser(object):
                 elif t == ':objects':
                     problem.objects = PDDLParser.parse_hierarchy(group, t)
                 elif t == ':init':
-                    PDDLParser.state = frozenset_of_tuples(group)
+                    problem.state = frozenset_of_tuples(group)
                 elif t == ':goal':
                     positive_goals, negative_goals = PDDLParser.split_predicates(group[0], '', 'goals')
                     problem.positive_goals = frozenset_of_tuples(positive_goals)

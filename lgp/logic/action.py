@@ -43,7 +43,9 @@ class Action:
             negative_preconditions = self.replace(self.negative_preconditions, variables, assignment)
             add_effects = self.replace(self.add_effects, variables, assignment)
             del_effects = self.replace(self.del_effects, variables, assignment)
-            yield Action(self.name, assignment, positive_preconditions, negative_preconditions, add_effects, del_effects)
+            yield Action(name=self.name, parameters=assignment,
+                         positive_preconditions=positive_preconditions, negative_preconditions=negative_preconditions,
+                         add_effects=add_effects, del_effects=del_effects)
 
     def replace(self, group, variables, assignment):
         g = []
