@@ -1,6 +1,7 @@
 import logging
+import re
 
-from action import Action
+from lgp.logic.action import Action
 
 
 class PDDLParser(object):
@@ -18,6 +19,32 @@ class PDDLParser(object):
         self.objects = {}
         self.actions = []
         self.predicates = {}
+
+    def scan_tokens(self, filename):
+        with open(filename, 'r') as f:
+            # Remove single line comments
+            content = re.sub(r';.*$', '', f.read(), flags=re.MULTILINE).lower()
+        # Tokenize
+        stack = []
+        array = []
+        for t in re.findall(r'[()]|[^\s()]+', content):
+            if t == '(':
+                stack.append(array)
+                array = []
+            elif t == ')':
+                if stack:
+                    temp = array
+                    array = stack.pop()
+                    array.append(temp)
+                else:
+                    raise Exception('Missing open parentheses')
+            else:
+                array.append(t)
+        if stack:
+            raise Exception('Missing close parentheses')
+        if len(array) != 1:
+            raise Exception('Invalid PDDL expressions! Please check again.')
+        return array[0]
 
     def parse_action(self, group):
         name = group.pop(0)
@@ -65,3 +92,24 @@ class PDDLParser(object):
         This is placeholder function for extensible keywords of actions in PDDL.
         '''
         PDDLParser.logger.warn(str(t) + ' is not recognized in action')
+
+    def parse_predicates(self, group):
+        for pred in group:
+            predicate_name = pred.pop(0)
+            if predicate_name in self.predicates:
+                raise Exception('Predicate ' + predicate_name + ' redefined')
+            arguments = {}
+            untyped_variables = []
+            while pred:
+                t = pred.pop(0)
+                if t == '-':
+                    if not untyped_variables:
+                        raise Exception('Unexpected hyphen in predicates')
+                    typ = pred.pop(0)
+                    while untyped_variables:
+                        arguments[untyped_variables.pop(0)] = typ
+                else:
+                    untyped_variables.append(t)
+            while untyped_variables:
+                arguments[untyped_variables.pop(0)] = 'object'
+            self.predicates[predicate_name] = arguments

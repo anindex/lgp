@@ -6,7 +6,7 @@ class Action:
     An Action schema with +/- preconditions and +/- effects.
     This class follows PDDL action schema.
     '''
-    def __init__(self, name, parameters, positive_preconditions, negative_preconditions, add_effects, del_effects):
+    def __init__(self, name, parameters, positive_preconditions, negative_preconditions, add_effects, del_effects, extensions=None):
         self.name = name
         self.parameters = parameters
         self.positive_preconditions = Action.frozenset_of_tuples(positive_preconditions)
@@ -23,8 +23,8 @@ class Action:
             return
         type_map = []
         variables = []
-        for var, type in self.parameters:
-            type_stack = [type]
+        for var, typ in self.parameters:
+            type_stack = [typ]
             items = []
             while type_stack:
                 t = type_stack.pop()
