@@ -66,7 +66,15 @@ class LGPTree(object):
         return paths, act_seqs
 
     def draw_tree(self, label=True, show=True):
-        nx.draw(self.tree, with_labels=label)
+        color_map = []
+        for n in self.tree:
+            if n == self.init_state:
+                color_map.append('green')
+            elif n in self.goal_states:
+                color_map.append('red')
+            else:
+                color_map.append('blue')
+        nx.draw(self.tree, with_labels=label, node_color=color_map, font_size=5)
         if show:
             plt.show()
 

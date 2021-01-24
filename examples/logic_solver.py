@@ -34,4 +34,4 @@ for i, seq in enumerate(act_seqs):
     print('Solution %d:' % (i + 1))
     for act in seq:
         print(act if args.v else act.name + ' ' + ' '.join(act.parameters))
-planner.draw_tree(label=False)
+planner.draw_tree(label=True)
