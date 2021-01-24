@@ -10,5 +10,6 @@
     (:goal (and
         (on disk table)
         (on cup table)
+        (at pr2 table)
     ))
 )

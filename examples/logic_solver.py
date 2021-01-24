@@ -8,7 +8,7 @@ DATA_DIR = join(ROOT_DIR, 'data', 'scenarios')
 sys.path.append(ROOT_DIR)
 
 from lgp.logic.parser import PDDLParser  # noqa
-from lgp.logic.planner import PDDLPlanner  # noqa
+from lgp.logic.tree import LGPTree  # noqa
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python logic_solver.py prepare_meal')
@@ -24,8 +24,14 @@ domain = PDDLParser.parse_domain(domain_file)
 problem = PDDLParser.parse_problem(problem_file)
 parse_time = time.time()
 print('Parsing time: ' + str(parse_time - start_time) + 's')
-plan = PDDLPlanner.plan(domain, problem)
-print('Planning time: ' + str(time.time() - parse_time) + 's')
-print('Plan: ')
-for act in plan:
-    print(act if args.v else act.name + ' ' + ' '.join(act.parameters))
+planner = LGPTree(domain, problem)
+planner.build_tree()
+build_time = time.time()
+print('Build LGP tree time: ' + str(build_time - parse_time) + 's')
+_, act_seqs = planner.plan()
+print('Planning time: ' + str(time.time() - build_time) + 's')
+for i, seq in enumerate(act_seqs):
+    print('Solution %d:' % (i + 1))
+    for act in seq:
+        print(act if args.v else act.name + ' ' + ' '.join(act.parameters))
+planner.draw_tree(label=False)
