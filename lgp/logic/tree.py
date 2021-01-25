@@ -54,10 +54,10 @@ class LGPTree(object):
             return []
         paths = []
         act_seqs = []
-        path = nx.shortest_path(self.tree)
+        path = nx.shortest_path(self.tree, source=state)
         for g in self.goal_states:
             try:
-                p = path[state][g]
+                p = path[g]
                 paths.append(p)
                 act_seq = [self.tree[p[i]][p[i + 1]]['action'] for i in range(len(p) - 1)]
                 act_seqs.append(act_seq)
