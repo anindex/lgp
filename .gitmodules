@@ -1,0 +1,3 @@
+[submodule "pyrieef"]
+	path = pyrieef
+	url = https://github.com/humans-to-robots-motion/pyrieef
