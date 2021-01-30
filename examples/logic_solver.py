@@ -28,10 +28,10 @@ planner = LGPTree(domain, problem)
 planner.build_tree()
 build_time = time.time()
 print('Build LGP tree time: ' + str(build_time - parse_time) + 's')
-_, act_seqs = planner.plan()
+paths, act_seqs = planner.plan()
 print('Planning time: ' + str(time.time() - build_time) + 's')
 for i, seq in enumerate(act_seqs):
     print('Solution %d:' % (i + 1))
     for act in seq:
         print(act if args.v else act.name + ' ' + ' '.join(act.parameters))
-planner.draw_tree(label=True)
+planner.draw_tree(paths=paths, label=True)

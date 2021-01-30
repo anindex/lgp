@@ -10,7 +10,7 @@ class LGPTree(object):
     def __init__(self, domain, problem):
         self.domain = domain
         self.problem = problem
-        self.tree = nx.Graph(name=self.problem.name)
+        self.tree = nx.DiGraph(name=self.problem.name)
         self.init_state = self.problem.state
         self.goal_states = []
 
@@ -65,18 +65,37 @@ class LGPTree(object):
                 LGPTree.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
         return paths, act_seqs
 
-    def draw_tree(self, label=True, show=True):
+    def draw_tree(self, init_state=None, paths=None, label=True, show=True):
+        node_color = self._color_states(init_state)
+        edge_color = None
+        if paths is not None:
+            edge_color = self._color_edges(paths)
+        nx.draw(self.tree, with_labels=label, node_color=node_color, edge_color=edge_color, font_size=5)
+        if show:
+            plt.show()
+
+    def _color_states(self, init_state=None):
+        if init_state is None:
+            init_state = self.init_state
         color_map = []
         for n in self.tree:
-            if n == self.init_state:
+            if n == init_state:
                 color_map.append('green')
             elif n in self.goal_states:
                 color_map.append('red')
             else:
-                color_map.append('blue')
-        nx.draw(self.tree, with_labels=label, node_color=color_map, font_size=5)
-        if show:
-            plt.show()
+                color_map.append('skyblue')
+        return color_map
+
+    def _color_edges(self, paths):
+        edges = tuple((p[i], p[i + 1]) for p in paths for i in range(len(p) - 1))
+        edge_color = []
+        for e in self.tree.edges():
+            if e in edges:
+                edge_color.append('red')
+            else:
+                edge_color.append('black')
+        return edge_color
 
     @staticmethod
     def applicable(state, positive, negative):
