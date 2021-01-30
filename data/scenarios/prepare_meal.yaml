@@ -1,0 +1,54 @@
+# Rules:
+#   - all coordinates are as format [x, y, phi]
+#   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
+#   - color is as format rgba
+workspace:
+  name: 'prepare_meal'
+  tree:
+    world:
+      origin: [0., 0., 0.]
+      type: 'env'
+      geometry: 
+        dim: [5., 5., 5.]
+      color:
+      children:
+        - robot:
+            origin: [2., 0., 0.]
+            type: 'robot'
+            geometry: 
+              radius: 0.1
+            color: [1, 1, 1, 1]
+            children:
+        - table:
+            origin: [2., 0., 0.]
+            type: 'box_obj'
+            geometry: 
+              dim: [1., 1.]
+            color: [1, 0.8, 0.6, 0.8]
+            children:
+        - shelf1:
+            origin: [0.5, 4., 0.]
+            type: 'box_obj'
+            geometry:
+              dim: [0.5, 0.5]
+            color: [1, 0.8, 0.6, 0.8]
+            children:
+              - disk:
+                  origin: [0.1, 0.1, 0.]
+                  type: 'point_obj'
+                  geometry: {}
+                  color: [0, 1, 1, 0.9] 
+                  children:
+        - shelf2:
+            origin: [4., 4., 0.]
+            type: 'box_obj'
+            geometry:
+              dim: [0.5, 0.5]
+            color: [1, 0.8, 0.6, 0.8]
+            children:
+              - cup:
+                  origin: [0.1, 0.1, 0.]
+                  type: 'point_obj'
+                  geometry: {}
+                  color: [0, 1, 1, 0.9]
+                  children:

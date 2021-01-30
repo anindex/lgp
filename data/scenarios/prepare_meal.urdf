@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<workspace name='prepare_meal'>
+    <dimension size="5.0 5.0 5.0"/>
+
+    <link name="world"/>
+
+    <robot name="simple">
+        <link name="base">
+            <visual>
+                <geometry>
+                    <cylinder length="0.2" radius="0.1"/>
+                </geometry>
+                <material name="white">
+                    <color rgba="1 1 1 1"/>
+                </material>
+            </visual>
+            <inertial>
+                <mass value="0."/>
+                <inertia ixx="1." ixy="0." ixz="0." iyy="1." iyz="0." izz="1."/>
+            </inertial>
+        </link>
+    </robot>
+
+    <link name="table">
+        <visual>
+            <geometry>
+                <box size="1.0 1.0 0.1"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="1.0 1.0 0.1"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="shelf1">
+        <visual>
+            <geometry>
+                <box size="0.5 0.5 0.5"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.5 0.5 0.5"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="shelf2">
+        <visual>
+            <geometry>
+                <box size="0.5 0.5 0.5"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.5 0.5 0.5"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="disk">
+        <visual>
+            <geometry>
+                <cylinder length="0.01" radius="0.1"/>
+            </geometry>
+        </visual>
+    </link>
+
+    <link name="cup">
+        <visual>
+            <geometry>
+                <cylinder length="0.05" radius="0.03"/>
+            </geometry>
+        </visual>
+    </link>
+
+    <joint name="world_to_table" type="fixed">
+        <parent link="world"/>
+        <child link="table"/>
+        <origin xyz="2.0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="world_to_shelf1" type="fixed">
+        <parent link="world"/>
+        <child link="shelf1"/>
+        <origin xyz="0 2.0 0" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="world_to_shelf2" type="fixed">
+        <parent link="world"/>
+        <child link="shelf2"/>
+        <origin xyz="2.0 2.0 0" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="shelf1_to_disk" type="fixed">
+        <parent link="shelf1"/>
+        <child link="disk"/>
+        <origin xyz="0.1 0.1 0.5" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="shelf2_to_cup" type="fixed">
+        <parent link="shelf2"/>
+        <child link="cup"/>
+        <origin xyz="0.1 0.1 0.5" rpy="0 0 0"/>
+    </joint>
+
+</workspace>

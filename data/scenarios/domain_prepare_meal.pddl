@@ -4,7 +4,7 @@
   (:constants
     table shelf1 shelf2 - location
     disk cup - object
-    pr2 - agent
+    robot - agent
   )
   (:predicates
     (at ?a - agent ?l - location)
