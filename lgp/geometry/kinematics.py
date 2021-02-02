@@ -46,8 +46,7 @@ class Robot(Circle):
     def __init__(self, **kwargs):
         origin = np.asarray(kwargs.get('origin', np.zeros(2)))
         radius = np.asarray(kwargs.get('radius', 0.2))
-        self.movable = kwargs.get('movable', True)
-        self.init_symbol = kwargs.get('init_symbol', frozenset())
+        self.init_symbol = frozenset_of_tuples(kwargs.get('init_symbol', []))
         self.kinematic_map = LinearTranslation(origin)
         self.couplings = {}  # hold objects. TODO: replace by a kinematic tree later if robot is more complex.
         super(Robot, self).__init__(origin=origin, radius=radius)
@@ -61,14 +60,17 @@ class Robot(Circle):
             return
         self.couplings.pop(name)
 
+    def set_init_symbol(self, init_symbol):
+        self.init_symbol = frozenset_of_tuples(init_symbol)
+
     @property
     def symbolic_state(self):
         symbols = []
         if not self.couplings:
-            symbols.append(['free', self.name])
+            symbols.append(['free', 'robot'])
         else:
             for obj in self.couplings:
-                symbols.append(['carry', self.name, obj.name])
+                symbols.append(['carry', 'robot', obj.name])
         return self.init_symbol.union(frozenset_of_tuples(symbols))
 
     @property
@@ -86,7 +88,6 @@ class BoxObject(Box):
     def __init__(self, **kwargs):
         origin = np.asarray(kwargs.get('origin', np.zeros(2)))
         dim = np.asarray(kwargs.get('dim', np.ones(2)))
-        self.movable = kwargs.get('movable', False)
         self.kinematic_map = LinearTranslation(origin)
         super(BoxObject, self).__init__(origin=origin, dim=dim)
 
@@ -98,7 +99,6 @@ class BoxObject(Box):
 class PointObject(Shape):
     def __init__(self, **kwargs):
         self.origin = np.asarray(kwargs.get('origin', np.zeros(2)))
-        self.movable = kwargs.get('movable', True)
         self.kinematic_map = LinearTranslation(self.origin)
         super(PointObject, self).__init__()
 

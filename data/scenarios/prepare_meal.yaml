@@ -9,48 +9,62 @@ workspace:
   tree:
     world:
       origin: [0., 0.]
-      type: 'env'
       geometry: 
         dim: [5., 5.]
-      color: [1, 1, 1, 1]
+      property:
+        type_obj: 'env'
+        color: [1, 1, 1, 1]
+        movable: False
       children:
         - robot:
-            origin: [0., -0.5]
-            type: 'robot'
-            geometry: 
+            origin: [0., -1.2]
+            geometry:
               radius: 0.1
-            color: [0, 1, 0, 1]
+            property:
+              type_obj: 'robot'
+              color: [0, 1, 0, 1]
+              movable: True
             children:
         - table:
             origin: [0., -1.5]
-            type: 'box_obj'
             geometry: 
               dim: [1., 1.]
-            color: [1, 0.8, 0.6, 0.5]
+            property:
+              type_obj: 'box_obj'
+              color: [1, 0.8, 0.6, 0.5]
+              movable: False
             children:
         - shelf1:
             origin: [-1., 1.5]
-            type: 'box_obj'
             geometry:
               dim: [0.5, 0.5]
-            color: [1, 0.8, 0.6, 0.5]
+            property:
+              type_obj: 'box_obj'
+              color: [1, 0.8, 0.6, 0.5]
+              movable: False
             children:
               - disk:
                   origin: [0.1, 0.1]
-                  type: 'point_obj'
                   geometry: {}
-                  color: [0, 1, 1, 0.9] 
+                  property:
+                    type_obj: 'point_obj'
+                    color: [0, 1, 1, 0.9]
+                    movable: True
                   children:
         - shelf2:
             origin: [1., 1.5]
-            type: 'box_obj'
             geometry:
               dim: [0.5, 0.5]
-            color: [1, 0.8, 0.6, 0.5]
+            property:
+              type_obj: 'box_obj'
+              color: [1, 0.8, 0.6, 0.5]
+              movable: False
             children:
               - cup:
                   origin: [0.1, 0.1]
-                  type: 'point_obj'
                   geometry: {}
-                  color: [0, 1, 1, 0.9]
+                  property:
+                    type_obj: 'point_obj'
+                    color: [0, 1, 1, 0.9]
+                    movable: True
                   children:
