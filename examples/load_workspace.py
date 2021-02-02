@@ -1,4 +1,5 @@
 import sys
+import time
 import argparse
 import yaml
 from os.path import join, dirname, abspath
@@ -19,5 +20,8 @@ with open(join(DATA_DIR, args.yaml_file), 'r') as f:
     except yaml.YAMLError as exc:
         print(exc)
 
+start_time = time.time()
 workspace = LGPWorkspace(config)
+print('Build workspace tree time: ' + str(time.time() - start_time) + 's')
 workspace.draw_kinematic_tree()
+workspace.draw_workspace()

@@ -1,53 +1,55 @@
 # Rules:
-#   - all coordinates are as format [x, y, phi]
+#   - all coordinates are as format [x, y]
+#   - 'world' is always the root of the workspace
 #   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
 #   - color is as format rgba
+# TODO: maybe implement x, y, phi kinematic later if needed
 workspace:
   name: 'prepare_meal'
   tree:
     world:
-      origin: [0., 0., 0.]
+      origin: [0., 0.]
       type: 'env'
       geometry: 
-        dim: [5., 5., 5.]
-      color:
+        dim: [5., 5.]
+      color: [1, 1, 1, 1]
       children:
         - robot:
-            origin: [2., 0., 0.]
+            origin: [0., -0.5]
             type: 'robot'
             geometry: 
               radius: 0.1
-            color: [1, 1, 1, 1]
+            color: [0, 1, 0, 1]
             children:
         - table:
-            origin: [2., 0., 0.]
+            origin: [0., -1.5]
             type: 'box_obj'
             geometry: 
               dim: [1., 1.]
-            color: [1, 0.8, 0.6, 0.8]
+            color: [1, 0.8, 0.6, 0.5]
             children:
         - shelf1:
-            origin: [0.5, 4., 0.]
+            origin: [-1., 1.5]
             type: 'box_obj'
             geometry:
               dim: [0.5, 0.5]
-            color: [1, 0.8, 0.6, 0.8]
+            color: [1, 0.8, 0.6, 0.5]
             children:
               - disk:
-                  origin: [0.1, 0.1, 0.]
+                  origin: [0.1, 0.1]
                   type: 'point_obj'
                   geometry: {}
                   color: [0, 1, 1, 0.9] 
                   children:
         - shelf2:
-            origin: [4., 4., 0.]
+            origin: [1., 1.5]
             type: 'box_obj'
             geometry:
               dim: [0.5, 0.5]
-            color: [1, 0.8, 0.6, 0.8]
+            color: [1, 0.8, 0.6, 0.5]
             children:
               - cup:
-                  origin: [0.1, 0.1, 0.]
+                  origin: [0.1, 0.1]
                   type: 'point_obj'
                   geometry: {}
                   color: [0, 1, 1, 0.9]
