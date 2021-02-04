@@ -13,6 +13,7 @@ class LGPTree(object):
         self.tree = nx.DiGraph(name=self.problem.name)
         self.init_state = self.problem.state
         self.goal_states = []
+        self.build_tree()
 
     def build_tree(self):
         '''
@@ -22,8 +23,7 @@ class LGPTree(object):
         negative_goals = self.problem.negative_goals
         state = self.problem.state
         if LGPTree.applicable(state, positive_goals, negative_goals):
-            LGPTree.logger.info('Goals are already achieved! Do nothing.')
-            return
+            LGPTree.logger.info('Goals are already achieved!')
         self.tree.clear()
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         ground_actions = self.domain.ground_actions()

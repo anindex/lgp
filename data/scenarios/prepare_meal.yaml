@@ -16,6 +16,24 @@ workspace:
         color: [1, 1, 1, 1]
         movable: False
       children:
+        - human1:
+            origin: [-0.6, 0.5]
+            geometry:
+              radius: 0.2
+            property:
+              type_obj: 'human'
+              color: [0, 0, 1, 1]
+              movable: True
+            children:
+        - human2:
+            origin: [0.6, 0.5]
+            geometry:
+              radius: 0.2
+            property:
+              type_obj: 'human'
+              color: [0, 0.5, 0.5, 1]
+              movable: True
+            children:
         - robot:
             origin: [0., -1.2]
             geometry:

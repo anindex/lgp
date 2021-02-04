@@ -3,31 +3,127 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
-from pyrieef.geometry.workspace import Workspace
+from pyrieef.geometry.pixel_map import PixelMap
 
-from lgp.geometry.kinematics import OBJECT_MAP
+from lgp.geometry.kinematics import OBJECT_MAP, EnvBox
 from lgp.geometry.transform import LinearTranslation
-from lgp.utils.helpers import DRAW_MAP, frozenset_of_tuples
+from lgp.utils.helpers import DRAW_MAP, frozenset_of_tuples, draw_trajectory
+
+
+class Workspace:
+    """
+       Contains obstacles.
+    """
+
+    def __init__(self, **kwargs):
+        self.box = kwargs.get('box', EnvBox())
+        self.obstacles = kwargs.get('obstacles', {})
+
+    def in_collision(self, pt):
+        for k, obst in self.obstacles.items():
+            if obst.dist_from_border(pt) < 0.:
+                return True
+        return False
+
+    def min_dist(self, pt):
+        if len(pt.shape) == 1:
+            d_m = float("inf")
+        else:
+            d_m = np.full((pt.shape[1], pt.shape[2]), np.inf)
+        obj = None
+        for k, obst in self.obstacles.items():
+            d = obst.dist_from_border(pt)
+            closer_to_k = d < d_m
+            d_m = np.where(closer_to_k, d, d_m)
+            obj = np.where(closer_to_k, k, obj)
+        return [d_m.tolist(), obj.tolist()]
+
+    def min_dist_gradient(self, pt):
+        """ Warning: this gradient is ill defined
+            it has a kink when two objects are at the same distance """
+        [d_m, obj] = self.min_dist(pt)
+        return self.obstacles[obj].dist_gradient(pt)
+
+    def all_points(self):
+        points = []
+        for k, o in self.obstacles.items():
+            points += o.sampled_points()
+        return points
+
+    def pixel_map(self, nb_points=100):
+        extent = self.box.extent()
+        assert extent.x() == extent.y()
+        resolution = extent.x() / nb_points
+        return PixelMap(resolution, extent)
 
 
 class LGPWorkspace(Workspace):
     '''
     NOTE: Ideally, we should adopt URDF format to define the workspace. Currently, we use self-defined yaml config for this.
+    For now this only supports one agent (robot).
     '''
     logger = logging.getLogger(__name__)
-    SUPPORTED_PREDICATES = ['at', 'on', 'carry', 'free', 'avoid_human']
+    SUPPORTED_PREDICATES = ('at', 'on', 'carry', 'free', 'avoid_human')
+    DEDUCED_PREDICATES = ('at', 'on', 'carry', 'free')
     GLOBAL_FRAME = 'world'
 
     def __init__(self, config, init_symbol=None):
-        self.name = config['workspace']['name']
-        self.kin_tree = LGPWorkspace.build_kinematic_tree(config)
+        self.name = config['name']
+        self.robots = {}
+        self.humans = {}
+        self.kin_tree = self.build_kinematic_tree(config)
         super(LGPWorkspace, self).__init__(box=self.kin_tree.nodes[LGPWorkspace.GLOBAL_FRAME]['link_obj'])
+        # init locations
+        self.locations = tuple(location for location in self.kin_tree.successors(LGPWorkspace.GLOBAL_FRAME)
+                               if not self.kin_tree.nodes[location]['movable'])
+        # init geometric & symbolic states
         self.update_geometric_state()
         self.update_symbolic_state(init_symbol=init_symbol)
 
+    def set_init_robot_symbol(self, init_symbol):
+        if not self.robots:
+            LGPWorkspace.logger.warn('There is no robot frame in workspace!')
+            return
+        for symbol in init_symbol:
+            robot_frame = symbol[1]  # assuming agent argument is always at second place by convention
+            if symbol[0] not in LGPWorkspace.SUPPORTED_PREDICATES:
+                continue
+            if robot_frame in self.robots:
+                self.robots[robot_frame].add_symbol(frozenset_of_tuples([symbol]))
+            else:
+                LGPWorkspace.logger.warn('This symbol %s is not associated with any robot!' % symbol)
+
+    def build_kinematic_tree(self, config):
+        tree = nx.DiGraph()
+        fringe = deque()
+        fringe.append(config['tree'])
+        while fringe:
+            node = fringe.popleft()
+            for link in node:
+                typ = node[link]['property']['type_obj']
+                link_obj = OBJECT_MAP[typ](origin=np.array(node[link]['origin']), **node[link]['geometry'])
+                if typ == 'robot':
+                    link_obj.name = link
+                    self.robots[link] = link_obj
+                elif typ == 'human':
+                    link_obj.name = link
+                    self.humans[link] = link_obj
+                tree.add_node(link, link_obj=link_obj, **node[link]['property'])
+                if node[link]['children'] is not None:
+                    for child in node[link]['children']:
+                        childname = list(child.keys())[0]
+                        tree.add_edge(link, childname)
+                        fringe.append(child)
+        return tree
+
+    def clear_paths(self):
+        for robot in self.robots.values():
+            robot.paths.clear()
+
     def get_global_coordinate(self, frame, x=None):
         if frame not in self.kin_tree:
-            LGPWorkspace.logger.warn('Object %s is not in workspace!' % frame)
+            LGPWorkspace.logger.error('Object %s is not in workspace!' % frame)
+            return
         if x is None:
             x = np.zeros(self.geometric_state_shape)
         while frame != LGPWorkspace.GLOBAL_FRAME:
@@ -37,7 +133,8 @@ class LGPWorkspace(Workspace):
 
     def get_global_map(self, frame):
         if frame not in self.kin_tree:
-            LGPWorkspace.logger.warn('Object %s is not in workspace!' % frame)
+            LGPWorkspace.logger.error('Object %s is not in workspace!' % frame)
+            return
         return LinearTranslation(self.geometric_state[frame])
 
     def transform(self, source_frame, target_frame, x):
@@ -54,27 +151,26 @@ class LGPWorkspace(Workspace):
         TODO: Extend this function by a more general deduction (could be a research question)
         '''
         symbolic_state = []
-        robot = self.kin_tree.nodes['robot']['link_obj']
         fringe = deque()
-        locations = list(self.kin_tree.successors(LGPWorkspace.GLOBAL_FRAME))
-        locations.remove('robot')
-        locations = tuple(locations)
-        fringe.extend(locations)
+        fringe.extend(self.locations)
         while fringe:
             frame = fringe.popleft()
             frame_property = self.kin_tree.nodes[frame]
-            if frame in locations and frame_property['link_obj'].is_inside(self.geometric_state['robot']):  # this assume locations list
-                symbolic_state.append(['at', 'robot', frame])
+            if frame in self.locations:
+                for robot_frame in self.robots:
+                    if frame_property['link_obj'].is_inside(self.geometric_state[robot_frame]):  # this assume locations list
+                        symbolic_state.append(['at', robot_frame, frame])
             for child in self.kin_tree.successors(frame):
                 child_property = self.kin_tree.nodes[child]
-                if frame in locations and child_property['movable'] and frame_property['link_obj'].is_inside(self.geometric_state[child]):
+                if frame in self.locations and child_property['movable'] and frame_property['link_obj'].is_inside(self.geometric_state[child]):
                     symbolic_state.append(['on', child, frame])
                 fringe.append(child)
+        self._symbolic_state = frozenset_of_tuples(symbolic_state)
         # get predicates from robot
         if init_symbol is not None:
-            robot.set_init_symbol(init_symbol)
-        symbolic_state = frozenset_of_tuples(symbolic_state)
-        self._symbolic_state = symbolic_state.union(robot.symbolic_state)
+            self.set_init_robot_symbol(init_symbol)
+        for robot in self.robots.values():
+            self._symbolic_state = self._symbolic_state.union(robot.symbolic_state)
 
     def update_geometric_state(self):
         '''
@@ -106,6 +202,11 @@ class LGPWorkspace(Workspace):
             draw = DRAW_MAP[frame_property['type_obj']](origin, *extents, facecolor=frame_property['color'])
             ax.add_patch(draw)
             ax.text(*origin, frame, fontsize=10)
+        # draw paths
+        for frame, robot in self.robots.items():
+            color = self.kin_tree.nodes[frame]['color']
+            for path in robot.paths:
+                draw_trajectory(ax, path, color)
         if show:
             plt.show()
 
@@ -114,23 +215,6 @@ class LGPWorkspace(Workspace):
         nx.draw(self.kin_tree, with_labels=True, node_color=node_color, font_size=10)
         if show:
             plt.show()
-
-    @staticmethod
-    def build_kinematic_tree(config):
-        tree = nx.DiGraph()
-        fringe = deque()
-        fringe.append(config['workspace']['tree'])
-        while fringe:
-            node = fringe.popleft()
-            for link in node:
-                link_obj = OBJECT_MAP[node[link]['property']['type_obj']](origin=np.array(node[link]['origin']), **node[link]['geometry'])
-                tree.add_node(link, link_obj=link_obj, **node[link]['property'])
-                if node[link]['children'] is not None:
-                    for child in node[link]['children']:
-                        childname = list(child.keys())[0]
-                        tree.add_edge(link, childname)
-                        fringe.append(child)
-        return tree
 
     @property
     def symbolic_state(self):

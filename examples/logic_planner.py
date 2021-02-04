@@ -11,7 +11,7 @@ from lgp.logic.parser import PDDLParser  # noqa
 from lgp.logic.tree import LGPTree  # noqa
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                 description='Example run: python logic_solver.py prepare_meal')
+                                 description='Example run: python logic_planner.py prepare_meal')
 parser.add_argument('scenario', help='The scenario name of the domain and problem file', type=str)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
@@ -25,7 +25,6 @@ problem = PDDLParser.parse_problem(problem_file)
 parse_time = time.time()
 print('Parsing time: ' + str(parse_time - start_time) + 's')
 planner = LGPTree(domain, problem)
-planner.build_tree()
 build_time = time.time()
 print('Build LGP tree time: ' + str(build_time - parse_time) + 's')
 paths, act_seqs = planner.plan()
