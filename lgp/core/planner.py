@@ -2,6 +2,7 @@ import logging
 import numpy as np
 from lgp.logic.tree import LGPTree
 from lgp.geometry.workspace import LGPWorkspace
+from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
 
@@ -60,13 +61,39 @@ class LGP(object):
         if not self.action_precondition_check(act_seqs[plan_idx][0]):
             LGP.logger.warn('Preconditions for first action do not satify! Planning may fail.')
         # LGP is highly handcrafted for predicate realization in geometric planning. Somehow a data-driven approach is prefered...
+        # this algorithm has no timing coordination (a research question for LGP timing coordination in multi-agent scenario)
+        waypoints = {robot_frame: [(self.workspace.geometric_state[robot_frame], 0)] for robot_frame in self.workspace.robots}
         for action in act_seqs[plan_idx]:
-            self.act(action, sanity_check=False)  # sanity check is not needed in planning ahead
+            if action.name == 'move':
+                robot_frame, location1_frame, location2_frame = action.parameters
+                t = len(waypoints[robot_frame]) * self.objective.T
+                waypoints[robot_frame].append((self.workspace.geometric_state[location2_frame], t))
+            else:
+                self.act(action, sanity_check=False)  # sanity check is not needed in planning ahead. This is only a projection of final effective space.
+        for robot_frame in self.workspace.robots:
+            robot = self.workspace.robots[robot_frame]
+            # this is a handcrafted code for setting human as an obstacle.
+            if ('avoid_human', robot_frame) in self.workspace.symbolic_state:
+                for human in self.human_predictor:
+                    self.workspace.obstacles[human] = self.human_predictor[human]
+            else:
+                for human in self.human_predictor:
+                    self.workspace.obstacles.pop(human, None)
+            trajectory = linear_interpolation_waypoints_trajectory(waypoints[robot_frame])
+            self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints[robot_frame])
+            reached, traj, grad, delta = self.objective.optimize()
+            if reached:
+                robot.paths.append(trajectory)  # add planned path
+            else:
+                LGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
 
     def dynamic_plan(self):
         pass
 
     def _move_action(self, action, sanity_check=False):
+        '''
+        This only use for dynamic planning.
+        '''
         # geometrically sanity check
         if sanity_check and not self.action_precondition_check(action):
             return

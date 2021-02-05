@@ -41,7 +41,7 @@ class TrajectoryConstraintObjective:
         self._acceleration_scalar = kwargs.get('acceleration_scalar', 20.)
         self._attractor_stdev = kwargs.get('attractor_stdev', 0.1)
 
-    def set_problem(self, workspace=None, trajectory=None, eq_constraints={}, ineq_constraints={}):
+    def set_problem(self, workspace=None, trajectory=None, waypoints=None, eq_constraints={}, ineq_constraints={}):
         if workspace is not None:
             self.workspace = workspace
             self.box = workspace.box
@@ -53,6 +53,8 @@ class TrajectoryConstraintObjective:
             self.trajectory = trajectory
             self._q_init = trajectory.initial_configuration()
             self._q_goal = trajectory.final_configuration()
+            self.T = trajectory.T()
+            self.trajectory_space_dim = (self.config_space_dim * (self.T + 2))
         else:
             if self._q_init is not None and self._q_goal is not None:
                 self.trajectory = linear_interpolation_trajectory(self._q_init, self._q_goal, self.T)
@@ -64,8 +66,12 @@ class TrajectoryConstraintObjective:
         self.signed_distance_field = SignedDistanceWorkspaceMap(self.workspace)
         self.obstacle_potential_from_sdf()
         self.create_clique_network()
+        if waypoints is not None:
+            for i in range(1, len(waypoints) - 1):
+                self.add_waypoint_terms(*waypoints[i], 100000.)
         self.add_all_terms()
-        self.add_attractor(self.trajectory)
+        if waypoints is None:
+            self.add_attractor(self.trajectory)
         self.create_objective()
 
     def obstacle_potential_from_sdf(self):
