@@ -186,6 +186,7 @@ class LGPWorkspace(Workspace):
                 fringe.append(child)
 
     def draw_workspace(self, show=True):
+        self.update_geometric_state()
         fig = plt.figure(figsize=(8, 8))
         extents = self.box.box_extent()
         ax = fig.add_subplot(111, autoscale_on=False, xlim=extents[:2], ylim=extents[2:])
