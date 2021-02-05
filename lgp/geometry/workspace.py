@@ -203,6 +203,11 @@ class LGPWorkspace(Workspace):
             ax.add_patch(draw)
             ax.text(*origin, frame, fontsize=10)
         # draw paths
+        self.draw_robot_paths(ax, show=False)
+        if show:
+            plt.show()
+
+    def draw_robot_paths(self, ax, show=True):
         for frame, robot in self.robots.items():
             color = self.kin_tree.nodes[frame]['color']
             for path in robot.paths:

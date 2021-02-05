@@ -43,3 +43,4 @@ if args.v:
     lgp.lgp_tree.draw_tree()
     lgp.workspace.draw_kinematic_tree()
 lgp.workspace.draw_workspace()
+lgp.draw_potential_heightmap()

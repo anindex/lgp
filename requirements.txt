@@ -1,3 +1,4 @@
 matplotlib
 networkx
 scipy
+git+git://github.com/humans-to-robots-motion/pyrieef

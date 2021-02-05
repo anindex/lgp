@@ -1,9 +1,13 @@
 import logging
 import numpy as np
+import matplotlib.pyplot as plt
 from lgp.logic.tree import LGPTree
 from lgp.geometry.workspace import LGPWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
+
+from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
+from pyrieef.geometry.pixel_map import sdf
 
 
 class LGP(object):
@@ -83,12 +87,32 @@ class LGP(object):
             self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints[robot_frame])
             reached, traj, grad, delta = self.objective.optimize()
             if reached:
-                robot.paths.append(trajectory)  # add planned path
+                robot.paths.append(traj)  # add planned path
             else:
                 LGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
 
     def dynamic_plan(self):
         pass
+
+    def draw_potential_heightmap(self, nb_points=100, show=True):
+        fig = plt.figure(figsize=(8, 8))
+        extents = self.workspace.box.box_extent()
+        ax = fig.add_subplot(111)
+        signed_dist_field = self._compute_signed_dist_field(nb_points=nb_points)
+        im = ax.imshow(signed_dist_field, cmap='inferno', interpolation='nearest', extent=extents)
+        fig.colorbar(im)
+        self.workspace.draw_robot_paths(ax, show=False)
+        if show:
+            plt.show()
+
+    def _compute_signed_dist_field(self, nb_points=100):
+        meshgrid = self.workspace.box.stacked_meshgrid(nb_points)
+        sdf_map = np.asarray(SignedDistanceWorkspaceMap(self.workspace)(meshgrid))
+        sdf_map = (sdf_map < 0).astype(float)
+        signed_dist_field = np.asarray(sdf(sdf_map))
+        signed_dist_field = np.flip(signed_dist_field, axis=0)
+        signed_dist_field = np.interp(signed_dist_field, (signed_dist_field.min(), signed_dist_field.max()), (0, max(self.workspace.box.dim)))
+        return signed_dist_field
 
     def _move_action(self, action, sanity_check=False):
         '''
