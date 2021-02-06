@@ -62,7 +62,8 @@ class PDDLParser(object):
                 elif t == ':predicates':
                     domain.predicates = PDDLParser.parse_predicates(group)
                 elif t == ':action':
-                    domain.actions.append(PDDLParser.parse_action(group))
+                    act = PDDLParser.parse_action(group)
+                    domain.actions[act.name] = act
                 else:
                     domain.extensions = PDDLParser.parse_domain_extended(group, t)
         else:
@@ -137,22 +138,7 @@ class PDDLParser(object):
         while group:
             t = group.pop(0)
             if t == ':parameters':
-                parameters = []
-                untyped_parameters = []
-                p = group.pop(0)
-                while p:
-                    t = p.pop(0)
-                    if t == '-':
-                        if not untyped_parameters:
-                            raise Exception('Unexpected hyphen in ' + name + ' parameters')
-                        ptype = p.pop(0)
-                        while untyped_parameters:
-                            parameters.append([untyped_parameters.pop(0), ptype])
-                    else:
-                        untyped_parameters.append(t)
-                while untyped_parameters:
-                    parameters.append([untyped_parameters.pop(0), 'object'])
-                action.parameters = parameters
+                action.parameters = PDDLParser.parse_action_parameters(group.pop(0), name)
             elif t == ':precondition':
                 positive_preconditions, negative_preconditions = PDDLParser.split_predicates(group.pop(0), name, ' preconditions')
                 action.positive_preconditions, action.negative_preconditions = frozenset_of_tuples(positive_preconditions), frozenset_of_tuples(negative_preconditions)
@@ -160,15 +146,37 @@ class PDDLParser(object):
                 add_effects, del_effects = PDDLParser.split_predicates(group.pop(0), name, ' effects')
                 action.add_effects, action.del_effects = frozenset_of_tuples(add_effects), frozenset_of_tuples(del_effects)
             else:
-                action.extensions = PDDLParser.parse_action_extended(group, t)
+                action.extensions[t] = PDDLParser.parse_action_extended(group.pop(0), t)
         return action
+
+    @staticmethod
+    def parse_action_parameters(group, name):
+        parameters = []
+        untyped_parameters = []
+        while group:
+            t = group.pop(0)
+            if t == '-':
+                if not untyped_parameters:
+                    raise Exception('Unexpected hyphen in ' + name + ' parameters')
+                ptype = group.pop(0)
+                while untyped_parameters:
+                    parameters.append([untyped_parameters.pop(0), ptype])
+            else:
+                untyped_parameters.append(t)
+        while untyped_parameters:
+            parameters.append([untyped_parameters.pop(0), 'object'])
+        return parameters
 
     @staticmethod
     def parse_action_extended(group, t):
         '''
         This is placeholder function for extensible keywords of actions in PDDL.
         '''
-        PDDLParser.logger.warn(str(t) + ' is not recognized in action')
+        if t == ':undo':
+            group.pop(0)
+            undo_action = PDDLParser.parse_action(group)
+            return undo_action
+        return None
 
     @staticmethod
     def parse_predicates(group):

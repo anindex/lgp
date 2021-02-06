@@ -8,6 +8,8 @@ class Action:
     An Action schema with +/- preconditions and +/- effects.
     This class follows PDDL action schema.
     '''
+    UNDO_TAG = ':undo'
+
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', 'unknown')
         self.parameters = kwargs.get('parameters', [])
@@ -15,6 +17,10 @@ class Action:
         self.negative_preconditions = frozenset_of_tuples(kwargs.get('negative_preconditions', []))
         self.add_effects = frozenset_of_tuples(kwargs.get('add_effects', []))
         self.del_effects = frozenset_of_tuples(kwargs.get('del_effects', []))
+        self.extensions = kwargs.get('extensions', {})
+
+    def get_variables(self):
+        return [var for var, _ in self.parameters]
 
     def groundify(self, constants, types):
         '''
@@ -24,7 +30,6 @@ class Action:
             yield self
             return
         type_map = []
-        variables = []
         for var, typ in self.parameters:
             type_stack = [typ]
             items = []
@@ -37,25 +42,40 @@ class Action:
                 else:
                     raise Exception('Unrecognized type ' + t)
             type_map.append(items)
-            variables.append(var)
+        variables = self.get_variables()
+        undo = self.extensions[Action.UNDO_TAG] if Action.UNDO_TAG in self.extensions else None
+        if undo is not None:
+            undo_variables = undo.get_variables()
         for assignment in itertools.product(*type_map):
-            positive_preconditions = self.replace(self.positive_preconditions, variables, assignment)
-            negative_preconditions = self.replace(self.negative_preconditions, variables, assignment)
-            add_effects = self.replace(self.add_effects, variables, assignment)
-            del_effects = self.replace(self.del_effects, variables, assignment)
+            assignment_map = dict(zip(variables, assignment))
+            positive_preconditions = Action.replace(self.positive_preconditions, assignment_map)
+            negative_preconditions = Action.replace(self.negative_preconditions, assignment_map)
+            add_effects = Action.replace(self.add_effects, assignment_map)
+            del_effects = Action.replace(self.del_effects, assignment_map)
+            # ground undo action
+            grounded_undo = None
+            if undo is not None:
+                undo_assigment = [assignment_map[v] for v in undo_variables]
+                undo_assigment_map = dict(zip(undo_variables, undo_assigment))
+                undo_pospre = Action.replace(undo.positive_preconditions, undo_assigment_map)
+                undo_negpre = Action.replace(undo.negative_preconditions, undo_assigment_map)
+                undo_addeffects = Action.replace(undo.add_effects, undo_assigment_map)
+                undo_deleffects = Action.replace(undo.del_effects, undo_assigment_map)
+                grounded_undo = Action(name=undo.name, parameters=undo_assigment,
+                                       positive_preconditions=undo_pospre, negative_preconditions=undo_negpre,
+                                       add_effects=undo_addeffects, del_effects=undo_deleffects)
             yield Action(name=self.name, parameters=assignment,
                          positive_preconditions=positive_preconditions, negative_preconditions=negative_preconditions,
-                         add_effects=add_effects, del_effects=del_effects)
+                         add_effects=add_effects, del_effects=del_effects, extensions={Action.UNDO_TAG: grounded_undo})
 
-    def replace(self, group, variables, assignment):
+    @staticmethod
+    def replace(group, assignment_map):
         g = []
         for pred in group:
             pred = list(pred)
-            iv = 0
-            for v in variables:
-                while v in pred:
-                    pred[pred.index(v)] = assignment[iv]
-                iv += 1
+            for i, token in enumerate(pred):
+                if token in assignment_map:
+                    pred[i] = assignment_map[token]
             g.append(pred)
         return g
 

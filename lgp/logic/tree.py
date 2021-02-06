@@ -3,6 +3,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
 
+from lgp.logic.action import Action
+
 
 class LGPTree(object):
     logger = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ class LGPTree(object):
                         if LGPTree.applicable(new_state, positive_goals, negative_goals):
                             self.goal_states.append(new_state)  # store goal states
                         self.tree.add_edge(state, new_state, action=act)
+                        if act.extensions[Action.UNDO_TAG] is not None:
+                            self.tree.add_edge(new_state, state, action=act.extensions[Action.UNDO_TAG])
                         visited.add(new_state)
                         fringe.append(new_state)
 
