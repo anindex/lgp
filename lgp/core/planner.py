@@ -39,10 +39,10 @@ class LGP(object):
         applied = LGPTree.applicable(self.workspace.symbolic_state, action.positive_preconditions, action.negative_preconditions)
         if not applied:
             LGP.logger.error('Sanity check failed! Cannot perform action %s' % action.name)
-            LGP.logger.info('Current workspace state: ', self.workspace.symbolic_state)
-            LGP.logger.info('Action parameters: ', action.parameters)
-            LGP.logger.info('Action positive preconditions: ', action.positive_preconditions)
-            LGP.logger.info('Action negative preconditions: ', action.negative_preconditions)
+            LGP.logger.info('Current workspace state: %s' % str(self.workspace.symbolic_state))
+            LGP.logger.info('Action parameters: %s' % str(action.parameters))
+            LGP.logger.info('Action positive preconditions: %s' % str(action.positive_preconditions))
+            LGP.logger.info('Action negative preconditions: %s' % str(action.negative_preconditions))
         return applied
 
     def act(self, action, sanity_check=True):

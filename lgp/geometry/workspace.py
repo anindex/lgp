@@ -91,7 +91,7 @@ class LGPWorkspace(Workspace):
             if robot_frame in self.robots:
                 self.robots[robot_frame].add_symbol(frozenset_of_tuples([symbol]))
             else:
-                LGPWorkspace.logger.warn('This symbol %s is not associated with any robot!' % symbol)
+                LGPWorkspace.logger.warn('This symbol %s is not associated with any robot!' % str(symbol))
 
     def build_kinematic_tree(self, config):
         tree = nx.DiGraph()

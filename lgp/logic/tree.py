@@ -15,9 +15,9 @@ class LGPTree(object):
         self.tree = nx.DiGraph(name=self.problem.name)
         self.init_state = self.problem.state
         self.goal_states = []
-        self.build_tree()
+        self.build_graph()
 
-    def build_tree(self):
+    def build_graph(self):
         '''
         Build LGP tree from PDDL domain and problem
         '''
@@ -30,7 +30,6 @@ class LGPTree(object):
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         ground_actions = self.domain.ground_actions()
         # BFS Search to build paths
-        visited = set([state])
         fringe = deque()
         fringe.append(state)
         while fringe:
@@ -38,13 +37,12 @@ class LGPTree(object):
             for act in ground_actions:
                 if LGPTree.applicable(state, act.positive_preconditions, act.negative_preconditions):
                     new_state = LGPTree.apply(state, act.add_effects, act.del_effects)
-                    if new_state not in visited:
+                    if not self.tree.has_edge(state, new_state):
                         if LGPTree.applicable(new_state, positive_goals, negative_goals):
                             self.goal_states.append(new_state)  # store goal states
                         self.tree.add_edge(state, new_state, action=act)
                         if act.extensions[Action.UNDO_TAG] is not None:
                             self.tree.add_edge(new_state, state, action=act.extensions[Action.UNDO_TAG])
-                        visited.add(new_state)
                         fringe.append(new_state)
 
     def plan(self, state=None):
