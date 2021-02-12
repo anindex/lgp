@@ -3,18 +3,17 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
 
-from lgp.logic.action import Action
-
 
 class LGPTree(object):
     logger = logging.getLogger(__name__)
 
-    def __init__(self, domain, problem):
+    def __init__(self, domain, problem, self_edge=False):
         self.domain = domain
         self.problem = problem
+        self.self_edge = self_edge
         self.tree = nx.DiGraph(name=self.problem.name)
         self.init_state = self.problem.state
-        self.goal_states = []
+        self.goal_states = set()
         self.build_graph()
 
     def build_graph(self):
@@ -37,12 +36,12 @@ class LGPTree(object):
             for act in ground_actions:
                 if LGPTree.applicable(state, act.positive_preconditions, act.negative_preconditions):
                     new_state = LGPTree.apply(state, act.add_effects, act.del_effects)
+                    if not self.self_edge and new_state == state:  # ignore same state transition
+                        continue
                     if not self.tree.has_edge(state, new_state):
                         if LGPTree.applicable(new_state, positive_goals, negative_goals):
-                            self.goal_states.append(new_state)  # store goal states
+                            self.goal_states.add(new_state)  # store goal states
                         self.tree.add_edge(state, new_state, action=act)
-                        if act.extensions[Action.UNDO_TAG] is not None:
-                            self.tree.add_edge(new_state, state, action=act.extensions[Action.UNDO_TAG])
                         fringe.append(new_state)
 
     def plan(self, state=None):
