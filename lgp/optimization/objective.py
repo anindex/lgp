@@ -98,7 +98,7 @@ class TrajectoryConstraintObjective:
             dist = np.linalg.norm(
                 self.trajectory.final_configuration() - self.q_goal)
             if self.verbose:
-                TrajectoryConstraintObjective.logger.info('Gradient norm : ', np.linalg.norm(res.jac))
+                TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
         elif optimizer == 'ipopt':
             res = minimize_ipopt(
                 x0=np.array(xi),
@@ -113,7 +113,7 @@ class TrajectoryConstraintObjective:
             dist = np.linalg.norm(
                 self.trajectory.final_configuration() - self.q_goal)
             if self.verbose:
-                TrajectoryConstraintObjective.logger.info('Gradient norm : ', np.linalg.norm(res.jac))
+                TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
         else:
             TrajectoryConstraintObjective.logger.error('Optimizer %s is not support!' % optimizer)
         return dist < 1.e-3, self.trajectory, gradient, delta
