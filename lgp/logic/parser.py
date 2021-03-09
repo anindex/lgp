@@ -204,6 +204,8 @@ class PDDLParser(object):
 
     @staticmethod
     def split_predicates(group, name, part):
+        if not group:
+            return [], []
         negative = []
         positive = []
         if group[0] == 'and':

@@ -69,9 +69,9 @@ class LGP(object):
         waypoints = {robot_frame: [(self.workspace.geometric_state[robot_frame], 0)] for robot_frame in self.workspace.robots}
         for action in act_seqs[plan_idx]:
             if action.name == 'move':
-                robot_frame, location1_frame, location2_frame = action.parameters
+                robot_frame, location_frame = action.parameters
                 t = len(waypoints[robot_frame]) * self.objective.T
-                waypoints[robot_frame].append((self.workspace.geometric_state[location2_frame], t))
+                waypoints[robot_frame].append((self.workspace.geometric_state[location_frame], t))
             else:
                 self.act(action, sanity_check=False)  # sanity check is not needed in planning ahead. This is only a projection of final effective space.
         for robot_frame in self.workspace.robots:
@@ -121,7 +121,7 @@ class LGP(object):
         # geometrically sanity check
         if sanity_check and not self.action_precondition_check(action):
             return
-        robot_frame, location1_frame, location2_frame = action.parameters  # location1 is only for symbol checking
+        robot_frame, location_frame = action.parameters  # location1 is only for symbol checking
         robot = self.workspace.robots[robot_frame]
         # this is a handcrafted code for setting human as an obstacle.
         if ('avoid_human', robot_frame) in self.workspace.symbolic_state:
@@ -133,7 +133,7 @@ class LGP(object):
         # TODO: add more constrainst if needed
         # for now use location2 state as goal, but it should be specified geometrically
         self.objective.q_init = self.workspace.geometric_state[robot_frame]
-        self.objective.q_goal = self.workspace.geometric_state[location2_frame]
+        self.objective.q_goal = self.workspace.geometric_state[location_frame]
         self.objective.set_problem(workspace=self.workspace)
         reached, traj, grad, delta = self.objective.optimize()
         if reached:

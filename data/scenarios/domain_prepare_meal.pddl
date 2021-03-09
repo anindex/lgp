@@ -15,9 +15,9 @@
   )
 
   (:action move
-      :parameters (?a - agent ?l1 ?l2 - location)
-      :precondition (at ?a ?l1)
-      :effect (and (at ?a ?l2) (not (at ?a ?l1)))
+      :parameters (?a - agent ?l - location)
+      :precondition ()
+      :effect (and (at ?a ?l) (not (at ?a ?*)))
   )
   (:action pick
       :parameters (?a - agent ?x - object ?l - location)

@@ -2,6 +2,7 @@ import logging
 import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
+from operator import itemgetter
 
 
 class LGPTree(object):
@@ -100,8 +101,26 @@ class LGPTree(object):
 
     @staticmethod
     def applicable(state, positive, negative):
+        positive = LGPTree.match_any(state, positive)
+        negative = LGPTree.match_any(state, negative)
         return positive.issubset(state) and negative.isdisjoint(state)
 
     @staticmethod
     def apply(state, positive, negative):
+        # only match any ?* for negative effects
+        negative = LGPTree.match_any(state, negative)
         return state.difference(negative).union(positive)
+
+    @staticmethod
+    def match_any(state, group):
+        for p in group:
+            if '?*' in p:
+                checks = [i for i, v in enumerate(p) if v != '?*']
+                for state_p in state:
+                    if p[0] in state_p:
+                        p_check = ''.join(itemgetter(*checks)(p))
+                        state_p_check = ''.join(itemgetter(*checks)(state_p))
+                        if p_check == state_p_check:
+                            group = group.difference(frozenset([p])).union(frozenset([state_p]))
+                            break
+        return group
