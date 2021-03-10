@@ -6,7 +6,7 @@ from lgp.utils.helpers import frozenset_of_tuples
 class Action:
     '''
     An Action schema with +/- preconditions and +/- effects.
-    This class follows PDDL action schema.
+    This class follows PDDL 1.2 action schema.
     '''
     UNDO_TAG = ':undo'
 
@@ -89,3 +89,73 @@ class Action:
                '\n  negative_preconditions: ' + str([list(i) for i in self.negative_preconditions]) + \
                '\n  add_effects: ' + str([list(i) for i in self.add_effects]) + \
                '\n  del_effects: ' + str([list(i) for i in self.del_effects]) + '\n'
+
+
+class DurativeAction(Action):
+    '''
+    A Durative Action schema with duration, at start & end with +/- preconditions and +/- effects.
+    This class follows PDDL 2.1 action schema.
+    '''
+    def __init__(self, **kwargs):
+        super(DurativeAction, self).__init__(**kwargs)
+        self.duration = kwargs.get('duration', None) # could be a function or a number
+        self.start_positive_preconditions = frozenset_of_tuples(kwargs.get('start_positive_preconditions', []))
+        self.start_negative_preconditions = frozenset_of_tuples(kwargs.get('start_negative_preconditions', []))
+        self.end_positive_preconditions = frozenset_of_tuples(kwargs.get('end_positive_preconditions', []))
+        self.end_negative_preconditions = frozenset_of_tuples(kwargs.get('end_negative_preconditions', []))
+        self.start_add_effects = frozenset_of_tuples(kwargs.get('start_add_effects', []))
+        self.start_del_effects = frozenset_of_tuples(kwargs.get('start_del_effects', []))
+        self.end_add_effects = frozenset_of_tuples(kwargs.get('start_add_effects', []))
+        self.end_del_effects = frozenset_of_tuples(kwargs.get('start_del_effects', []))
+
+    def groundify(self, constants, types):
+        '''
+        Ground durative actions with constants (propositional actions)
+        '''
+        if not self.parameters:
+            yield self
+            return
+        type_map = []
+        for var, typ in self.parameters:
+            type_stack = [typ]
+            items = []
+            while type_stack:
+                t = type_stack.pop()
+                if t in constants:
+                    items += constants[t]
+                elif t in types:
+                    type_stack += types[t]
+                else:
+                    raise Exception('Unrecognized type ' + t)
+            type_map.append(items)
+        variables = self.get_variables()
+        for assignment in itertools.product(*type_map):
+            assignment_map = dict(zip(variables, assignment))
+            start_positive_preconditions = Action.replace(self.start_positive_preconditions, assignment_map)
+            start_negative_preconditions = Action.replace(self.start_negative_preconditions, assignment_map)
+            end_positive_preconditions = Action.replace(self.end_positive_preconditions, assignment_map)
+            end_negative_preconditions = Action.replace(self.end_negative_preconditions, assignment_map)
+            start_add_effects = Action.replace(self.start_add_effects, assignment_map)
+            start_del_effects = Action.replace(self.start_del_effects, assignment_map)
+            end_add_effects = Action.replace(self.end_add_effects, assignment_map)
+            end_del_effects = Action.replace(self.end_del_effects, assignment_map)
+            yield DurativeAction(name=self.name, parameters=assignment,
+                                 start_positive_preconditions=start_positive_preconditions, start_negative_preconditions=start_negative_preconditions,
+                                 end_positive_preconditions=end_positive_preconditions, end_negative_preconditions=end_negative_preconditions,
+                                 start_add_effects=start_add_effects, start_del_effects=start_del_effects,
+                                 end_add_effects=end_add_effects, end_del_effects=end_del_effects)
+    
+    def __str__(self):
+        return 'durative-action: ' + self.name + \
+               '\n  parameters: ' + str(self.parameters) + \
+               '\n  start_positive_preconditions: ' + str([list(i) for i in self.start_positive_preconditions]) + \
+               '\n  start_negative_preconditions: ' + str([list(i) for i in self.start_negative_preconditions]) + \
+               '\n  end_positive_preconditions: ' + str([list(i) for i in self.end_positive_preconditions]) + \
+               '\n  end_negative_preconditions: ' + str([list(i) for i in self.end_negative_preconditions]) + \
+               '\n  start_add_effects: ' + str([list(i) for i in self.start_add_effects]) + \
+               '\n  start_del_effects: ' + str([list(i) for i in self.start_del_effects]) + \
+               '\n  end_add_effects: ' + str([list(i) for i in self.end_add_effects]) + \
+               '\n  end_del_effects: ' + str([list(i) for i in self.end_del_effects]) + '\n'
+    
+
+        

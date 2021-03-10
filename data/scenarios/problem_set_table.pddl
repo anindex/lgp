@@ -1,0 +1,33 @@
+(define (problem set_table_prob)
+    (:domain set_table)
+    (:init
+        (agent-at table)
+        (agent-free)
+        (agent-avoid-human)
+        (human-at, big_shelf)
+        (on, cup_red, small_shelf)
+        (on, cup_green, small_shelf)
+        (on, cup_blue, big_shelf)
+        (on, cup_pink, big_shelf)
+        (on, plate_blue, big_shelf)
+        (on, plate_green, table)
+        (on, plate_red, table)
+        (on, plate_pink, big_shelf)
+        (on, jug, table)
+        (on, bowl, big_shelf)
+    )
+    (:goal 
+        (or 
+            (and
+                (on plate_blue table)
+                (on cup_green table)
+                (agent-at table)
+            )
+            (and
+                (on plate_blue table)
+                (human-carry cup_green table)
+                (agent-at table)
+            )
+        )
+    )
+)

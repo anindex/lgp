@@ -13,6 +13,7 @@ class Domain(object):
         self.types = kwargs.get('types', {})
         self.constants = kwargs.get('constants', {})
         self.predicates = kwargs.get('predicates', {})
+        self.functions = kwargs.get('functions', {})
         self.actions = kwargs.get('actions', {})
         self.extensions = kwargs.get('extensions', {})
 
@@ -29,4 +30,5 @@ class Domain(object):
                '\nTypes: ' + str(self.types) + \
                '\nConstants: ' + str(self.constants) + \
                '\nPredicates: ' + str(self.predicates) + \
+               '\nFunctions: ' + str(self.functions) + \
                '\nActions: ' + str([str(a) for a in self.actions]) + '\n'

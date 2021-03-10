@@ -5,7 +5,7 @@
 #   - color is as format rgba
 # TODO: maybe implement x, y, phi kinematic later if needed
 workspace:
-  name: 'prepare_meal'
+  name: 'set_table'
   tree:
     world:
       origin: [0., 0.]
