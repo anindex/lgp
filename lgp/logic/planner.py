@@ -5,7 +5,7 @@ from collections import deque
 from operator import itemgetter
 
 
-class LGPTree(object):
+class LogicPlanner(object):
     logger = logging.getLogger(__name__)
 
     def __init__(self, domain, problem, self_edge=False):
@@ -24,35 +24,35 @@ class LGPTree(object):
         positive_goals = self.problem.positive_goals
         negative_goals = self.problem.negative_goals
         state = self.problem.state
-        if LGPTree.applicable(state, positive_goals, negative_goals):
-            LGPTree.logger.info('Goals are already achieved!')
         self.tree.clear()
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         ground_actions = self.domain.ground_actions()
         # BFS Search to build paths
         fringe = deque()
         fringe.append(state)
+        visited = set()
         while fringe:
             state = fringe.popleft()
             for act in ground_actions:
-                if LGPTree.applicable(state, act.positive_preconditions, act.negative_preconditions):
-                    new_state = LGPTree.apply(state, act.add_effects, act.del_effects)
+                if LogicPlanner.applicable(state, act.positive_preconditions, act.negative_preconditions):
+                    new_state = LogicPlanner.apply(state, act.add_effects, act.del_effects)
                     if not self.self_edge and new_state == state:  # ignore same state transition
                         continue
-                    if not self.tree.has_edge(state, new_state):
-                        if LGPTree.applicable(new_state, positive_goals, negative_goals):
+                    if new_state not in visited:
+                        if LogicPlanner.check_goal(new_state, positive_goals, negative_goals):
                             self.goal_states.add(new_state)  # store goal states
                         self.tree.add_edge(state, new_state, action=act)
                         fringe.append(new_state)
+                        visited.add(new_state)
 
     def plan(self, state=None):
         if self.tree.size() == 0:
-            LGPTree.logger.warn('LGP Tree is not built yet! Plan nothing.')
+            LogicPlanner.logger.warn('LGP Tree is not built yet! Plan nothing.')
             return []
         if state is None:
             state = self.init_state
         if not self.tree.has_node(state):
-            LGPTree.logger.warn('State: %s \n is not recognized in LGP tree! Plan nothing.' % str(state))
+            LogicPlanner.logger.warn('State: %s \n is not recognized in LGP tree! Plan nothing.' % str(state))
             return []
         paths = []
         act_seqs = []
@@ -64,7 +64,7 @@ class LGPTree(object):
                 act_seq = [self.tree[p[i]][p[i + 1]]['action'] for i in range(len(p) - 1)]
                 act_seqs.append(act_seq)
             except:  # noqa
-                LGPTree.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
+                LogicPlanner.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
         return paths, act_seqs
 
     def draw_tree(self, init_state=None, paths=None, label=True, show=True):
@@ -101,14 +101,14 @@ class LGPTree(object):
 
     @staticmethod
     def applicable(state, positive, negative):
-        positive = LGPTree.match_any(state, positive)
-        negative = LGPTree.match_any(state, negative)
+        positive = LogicPlanner.match_any(state, positive)
+        negative = LogicPlanner.match_any(state, negative)
         return positive.issubset(state) and negative.isdisjoint(state)
 
     @staticmethod
     def apply(state, positive, negative):
         # only match any ?* for negative effects
-        negative = LGPTree.match_any(state, negative)
+        negative = LogicPlanner.match_any(state, negative)
         return state.difference(negative).union(positive)
 
     @staticmethod
@@ -124,3 +124,11 @@ class LGPTree(object):
                             group = group.difference(frozenset([p])).union(frozenset([state_p]))
                             break
         return group
+    
+    @staticmethod
+    def check_goal(state, positive_goals, negative_goals):
+        assert len(positive_goals) == len(negative_goals)
+        for i in range(len(positive_goals)):
+            if LogicPlanner.applicable(state, positive_goals[i], negative_goals[i]):
+                return True
+        return False

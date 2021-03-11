@@ -168,11 +168,11 @@ class PDDLParser(object):
                 action.duration = group.pop(0)[2]
             elif t == ':precondition':
                 start_positive, start_negative, end_positive, end_negative = PDDLParser.split_durative_predicates(group.pop(0), name, ' preconditions')
-                action.start_positive_preconditions, action.start_negative_preconditions = frozenset_of_tuples(start_positive), frozenset_of_tuples(end_positive)
+                action.start_positive_preconditions, action.start_negative_preconditions = frozenset_of_tuples(start_positive), frozenset_of_tuples(start_negative)
                 action.end_positive_preconditions, action.end_negative_preconditions = frozenset_of_tuples(end_positive), frozenset_of_tuples(end_negative)
             elif t == ':effect':
                 start_positive, start_negative, end_positive, end_negative = PDDLParser.split_durative_predicates(group.pop(0), name, ' effects')
-                action.start_add_effects, action.start_del_effects = frozenset_of_tuples(start_positive), frozenset_of_tuples(end_positive)
+                action.start_add_effects, action.start_del_effects = frozenset_of_tuples(start_positive), frozenset_of_tuples(start_negative)
                 action.end_add_effects, action.end_del_effects = frozenset_of_tuples(end_positive), frozenset_of_tuples(end_negative)
             else:
                 action.extensions[t] = PDDLParser.parse_action_extended(group.pop(0), t)

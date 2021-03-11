@@ -105,8 +105,8 @@ class DurativeAction(Action):
         self.end_negative_preconditions = frozenset_of_tuples(kwargs.get('end_negative_preconditions', []))
         self.start_add_effects = frozenset_of_tuples(kwargs.get('start_add_effects', []))
         self.start_del_effects = frozenset_of_tuples(kwargs.get('start_del_effects', []))
-        self.end_add_effects = frozenset_of_tuples(kwargs.get('start_add_effects', []))
-        self.end_del_effects = frozenset_of_tuples(kwargs.get('start_del_effects', []))
+        self.end_add_effects = frozenset_of_tuples(kwargs.get('end_add_effects', []))
+        self.end_del_effects = frozenset_of_tuples(kwargs.get('end_del_effects', []))
 
     def groundify(self, constants, types):
         '''
@@ -135,13 +135,19 @@ class DurativeAction(Action):
             start_negative_preconditions = Action.replace(self.start_negative_preconditions, assignment_map)
             end_positive_preconditions = Action.replace(self.end_positive_preconditions, assignment_map)
             end_negative_preconditions = Action.replace(self.end_negative_preconditions, assignment_map)
+            positive_preconditions = start_positive_preconditions + end_positive_preconditions
+            negative_preconditions = start_negative_preconditions + end_negative_preconditions
             start_add_effects = Action.replace(self.start_add_effects, assignment_map)
             start_del_effects = Action.replace(self.start_del_effects, assignment_map)
             end_add_effects = Action.replace(self.end_add_effects, assignment_map)
             end_del_effects = Action.replace(self.end_del_effects, assignment_map)
+            add_effects = start_add_effects + end_add_effects
+            del_effects = start_del_effects + end_del_effects
             yield DurativeAction(name=self.name, parameters=assignment,
+                                 positive_preconditions=positive_preconditions, negative_preconditions=negative_preconditions,
                                  start_positive_preconditions=start_positive_preconditions, start_negative_preconditions=start_negative_preconditions,
                                  end_positive_preconditions=end_positive_preconditions, end_negative_preconditions=end_negative_preconditions,
+                                 add_effects=add_effects, del_effects=del_effects,
                                  start_add_effects=start_add_effects, start_del_effects=start_del_effects,
                                  end_add_effects=end_add_effects, end_del_effects=end_del_effects)
     
