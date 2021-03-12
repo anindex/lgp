@@ -58,7 +58,7 @@ class Workspace:
         return PixelMap(resolution, extent)
 
 
-class LGPWorkspace(Workspace):
+class YamlWorkspace(Workspace):
     '''
     NOTE: Ideally, we should adopt URDF format to define the workspace. Currently, we use self-defined yaml config for this.
     For now this only supports one agent (robot).
@@ -68,69 +68,31 @@ class LGPWorkspace(Workspace):
     DEDUCED_PREDICATES = ('at', 'on', 'carry', 'free')
     GLOBAL_FRAME = 'world'
 
-    def __init__(self, config=None, init_symbol=None):
-        self.name = config['name'] if config is not None else 'set_table'
+    def __init__(self, config, init_symbol=None):
+        self.name = config['name']
         self.robots = {}
         self.humans = {}
-        if config is not None:
-            self.kin_tree = self.build_kinematic_tree(config)
-            super(LGPWorkspace, self).__init__(box=self.kin_tree.nodes[LGPWorkspace.GLOBAL_FRAME]['link_obj'])
-            # init locations
-            self.locations = tuple(location for location in self.kin_tree.successors(LGPWorkspace.GLOBAL_FRAME)
-                                   if not self.kin_tree.nodes[location]['movable'])
-            # init geometric & symbolic states
-            self.update_geometric_state()
-            self.update_symbolic_state(init_symbol=init_symbol)
-    
-    def initialize_workspace_from_humoro(self, hr, segment, dim=[5., 5.]):
-        '''
-        Initialize workspace using interface from humoro
-        '''
-        config = {'tree': {'world': {'origin': [0., 0.], 'geometry': {'dim': dim}, 'property': {'type_obj': 'env', 'movable': False, 'color': [1, 1, 1, 1]}, 'children': []}}}
-        # obstables
-        for obj in hr.obstacles:
-            obj_id = hr.p._objects[obj]
-            pos, _ = p.getBasePositionAndOrientation(obj_id)
-            origin = [pos[0] - .10, pos[1] - .175]
-            obj_dict = {obj: {'origin': origin, 'geometry': {'dim': [.20, .35]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., 1., .3, .1]}, 'children': []}}
-            config['tree']['world']['children'].append(obj_dict)
-        # table
-        pos, _ = p.getBasePositionAndOrientation(hr.p._objects['table'])
-        origin = [pos[0] - .4, pos[1] - .4]
-        table_dict = {'table': {'origin': origin, 'geometry': {'dim': [.8, .8]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
-        config['tree']['world']['children'].append(table_dict)
-        # small_shelf
-        pos, _ = p.getBasePositionAndOrientation(hr.p._objects['vesken_shelf'])
-        origin = [pos[0] - .18, pos[1] - .11]
-        sshelf_dict = {'small_shelf': {'origin': origin, 'geometry': {'dim': [.36, .22]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
-        config['tree']['world']['children'].append(sshelf_dict)
-        # small_shelf
-        pos, _ = p.getBasePositionAndOrientation(hr.p._objects['laiva_shelf'])
-        origin = [pos[0] - .30, pos[1] - .12]
-        bshelf_dict = {'big_shelf': {'origin': origin, 'geometry': {'dim': [.59, .24]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
-        config['tree']['world']['children'].append(bshelf_dict)
         self.kin_tree = self.build_kinematic_tree(config)
-        # objects
-        for obj in hr.obj_names:
-            obj_id = hr.p._objects[obj]
-            pos, _ = p.getBasePositionAndOrientation(obj_id)
-            link_obj = OBJECT_MAP['point_obj'](origin=np.array(pos[:2]))
-            self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='point_obj', movable=True, color=[0, 1, 1, 0.9])
-        # update kin tree by predicates
-        self.update_kinematic_tree(hr.get_predicates(segment, 0))
+        super(YamlWorkspace, self).__init__(box=self.kin_tree.nodes[YamlWorkspace.GLOBAL_FRAME]['link_obj'])
+        # init locations
+        self.locations = tuple(location for location in self.kin_tree.successors(YamlWorkspace.GLOBAL_FRAME)
+                               if not self.kin_tree.nodes[location]['movable'])
+        # init geometric & symbolic states
+        self.update_geometric_state()
+        self.update_symbolic_state(init_symbol=init_symbol)
 
     def set_init_robot_symbol(self, init_symbol):
         if not self.robots:
-            LGPWorkspace.logger.warn('There is no robot frame in workspace!')
+            YamlWorkspace.logger.warn('There is no robot frame in workspace!')
             return
         for symbol in init_symbol:
             robot_frame = symbol[1]  # assuming agent argument is always at second place by convention
-            if symbol[0] not in LGPWorkspace.SUPPORTED_PREDICATES:
+            if symbol[0] not in YamlWorkspace.SUPPORTED_PREDICATES:
                 continue
             if robot_frame in self.robots:
                 self.robots[robot_frame].add_symbol(frozenset_of_tuples([symbol]))
             else:
-                LGPWorkspace.logger.warn('This symbol %s is not associated with any robot!' % str(symbol))
+                YamlWorkspace.logger.warn('This symbol %s is not associated with any robot!' % str(symbol))
 
     def build_kinematic_tree(self, config):
         tree = nx.DiGraph()
@@ -154,16 +116,6 @@ class LGPWorkspace(Workspace):
                         tree.add_edge(link, childname)
                         fringe.append(child)
         return tree
-    
-    def update_kinematic_tree(self, predicates):
-        for p in predicates:
-            if p[0] == 'on':
-                prev = list(self.kin_tree.predecessors(p[1]))
-                for n in prev:
-                    if ('on', p[1], n) not in predicates:
-                        self.kin_tree.remove_edge(n, p[1])
-                self.kin_tree.add_edge(p[2], p[1])
-                
 
     def clear_paths(self):
         for robot in self.robots.values():
@@ -171,24 +123,24 @@ class LGPWorkspace(Workspace):
 
     def get_global_coordinate(self, frame, x=None):
         if frame not in self.kin_tree:
-            LGPWorkspace.logger.error('Object %s is not in workspace!' % frame)
+            YamlWorkspace.logger.error('Object %s is not in workspace!' % frame)
             return
         if x is None:
             x = np.zeros(self.geometric_state_shape)
-        while frame != LGPWorkspace.GLOBAL_FRAME:
+        while frame != YamlWorkspace.GLOBAL_FRAME:
             x = self.kin_tree.nodes[frame]['link_obj'].kinematic_map.forward(x)
             frame = list(self.kin_tree.predecessors(frame))[0]
         return x
 
     def get_global_map(self, frame):
         if frame not in self.kin_tree:
-            LGPWorkspace.logger.error('Object %s is not in workspace!' % frame)
+            YamlWorkspace.logger.error('Object %s is not in workspace!' % frame)
             return
         return LinearTranslation(self.geometric_state[frame])
 
     def transform(self, source_frame, target_frame, x):
         if source_frame not in self.kin_tree or target_frame not in self.kin_tree:
-            LGPWorkspace.logger.warn('Frame %s or frame %s is not in workspace!' % (source_frame, target_frame))
+            YamlWorkspace.logger.warn('Frame %s or frame %s is not in workspace!' % (source_frame, target_frame))
         target_global_map = self.get_global_map(target_frame)
         source_local_map = LinearTranslation(target_global_map.backward(self.geometric_state[source_frame]))
         return source_local_map.forward(x)
@@ -227,7 +179,7 @@ class LGPWorkspace(Workspace):
         '''
         self._geometric_state = {}
         fringe = deque()
-        fringe.append(LGPWorkspace.GLOBAL_FRAME)
+        fringe.append(YamlWorkspace.GLOBAL_FRAME)
         while fringe:
             frame = fringe.popleft()
             self._geometric_state[frame] = self.get_global_coordinate(frame)
@@ -242,7 +194,7 @@ class LGPWorkspace(Workspace):
         ax.set_aspect('equal')
         ax.grid()
         for frame in self.geometric_state:
-            if frame == LGPWorkspace.GLOBAL_FRAME:
+            if frame == YamlWorkspace.GLOBAL_FRAME:
                 continue
             frame_property = self.kin_tree.nodes[frame]
             origin = self.geometric_state[frame]
@@ -282,3 +234,66 @@ class LGPWorkspace(Workspace):
     @property
     def geometric_state_shape(self):
         return self.box.origin.shape
+
+
+class HumoroWorkspace(YamlWorkspace):
+    logger = logging.getLogger(__name__)
+    SUPPORTED_PREDICATES = ('agent-at', 'agent-avoid-human', 'agent-carry', 'agent-free', 'agent-avoid-human', 'on', 'human-at', 'human-carry')
+    DEDUCED_PREDICATES = ('on', 'human-at', 'human-carry')
+    GLOBAL_FRAME = 'world'
+
+    def __init__(self, hr, name='set_table'):
+        self.name = name
+        self.hr = hr
+        self.segments = hr.get_data_segments()
+        self.kin_tree = None
+        self._symbolic_state = frozenset()
+
+    def set_init_robot_symbol(self, init_symbol):
+        self._symbolic_state = self._symbolic_state.union(init_symbol)
+
+    def initialize_workspace_from_humoro(self, segment_id, dim=[5., 5.]):
+        '''
+        Initialize workspace using interface from humoro
+        '''
+        global_frame = HumoroWorkspace.GLOBAL_FRAME
+        self.hr.load_for_playback(self.segments[segment_id])
+        config = {'tree': {global_frame: {'origin': [0., 0.], 'geometry': {'dim': dim}, 'property': {'type_obj': 'env', 'movable': False, 'color': [1, 1, 1, 1]}, 'children': []}}}
+        # obstables
+        for obj in self.hr.obstacles:
+            obj_id = self.hr.p._objects[obj]
+            pos, _ = p.getBasePositionAndOrientation(obj_id)
+            origin = [pos[0] - .10, pos[1] - .175]
+            obj_dict = {obj: {'origin': origin, 'geometry': {'dim': [.20, .35]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., 1., .3, .1]}, 'children': []}}
+            config['tree'][global_frame]['children'].append(obj_dict)
+        # table
+        pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
+        origin = [pos[0] - .4, pos[1] - .4]
+        table_dict = {'table': {'origin': origin, 'geometry': {'dim': [.8, .8]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
+        config['tree'][global_frame]['children'].append(table_dict)
+        # small_shelf
+        pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['vesken_shelf'])
+        origin = [pos[0] - .18, pos[1] - .11]
+        sshelf_dict = {'small_shelf': {'origin': origin, 'geometry': {'dim': [.36, .22]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
+        config['tree'][global_frame]['children'].append(sshelf_dict)
+        # small_shelf
+        pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['laiva_shelf'])
+        origin = [pos[0] - .30, pos[1] - .12]
+        bshelf_dict = {'big_shelf': {'origin': origin, 'geometry': {'dim': [.59, .24]}, 'property': {'type_obj': 'box_obj', 'movable': False, 'color': [1., .5, .25, 1.]}, 'children': []}}
+        config['tree'][global_frame]['children'].append(bshelf_dict)
+        # objects
+        for obj in self.hr.obj_names:
+            obj_id = self.hr.p._objects[obj]
+            pos, _ = p.getBasePositionAndOrientation(obj_id)
+            obj_dict = {obj: {'origin': pos[:2], 'geometry': {}, 'property': {'type_obj': 'point_obj', 'movable': True, 'color': [0, 1, 1, 0.9]}, 'children': []}}
+            config['tree'][global_frame]['children'].append(obj_dict)
+        self.kin_tree = self.build_kinematic_tree(config)
+        self._symbolic_state = frozenset_of_tuples(self.hr.get_predicates(self.segments[segment_id], 0))
+
+    @property
+    def symbolic_state(self):
+        return self._symbolic_state
+
+    @property
+    def geometric_state(self):
+        return self._geometric_state

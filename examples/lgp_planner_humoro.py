@@ -9,38 +9,26 @@ logging.basicConfig(level=logging.INFO)
 
 ROOT_DIR = join(dirname(abspath(__file__)), '..')
 DATA_DIR = join(ROOT_DIR, 'data', 'scenarios')
+DATASET_DIR = join(ROOT_DIR, 'datasets', 'mogaze')
 sys.path.append(ROOT_DIR)
 
 from lgp.logic.parser import PDDLParser  # noqa
-from lgp.core.planner import LGP  # noqa
+from lgp.core.planner import HumoroLGP  # noqa
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                 description='Example run: python lgp_planner.py prepare_meal')
-parser.add_argument('scenario', help='The scenario name of the domain, problem and data file', type=str)
+                                 description='Example run: python lgp_planner_humoro.py set_table')
+parser.add_argument('scenario', help='The scenario name of the domain, problem file', type=str)
+parser.add_argument('-id', help='Segment id in the MoGaze dataset', type=int, default=1)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 
 domain_file = join(DATA_DIR, 'domain_' + args.scenario + '.pddl')
 problem_file = join(DATA_DIR, 'problem_' + args.scenario + '.pddl')
-data_file = join(DATA_DIR, args.scenario + '.yaml')
-with open(data_file, 'r') as f:
-    try:
-        config = yaml.safe_load(f)
-    except yaml.YAMLError as exc:
-        print(exc)
 start_time = time.time()
 domain = PDDLParser.parse_domain(domain_file)
 problem = PDDLParser.parse_problem(problem_file)
 parse_time = time.time()
 print('Parsing time: ' + str(parse_time - start_time) + 's')
-lgp = LGP(domain, problem, config['workspace'], verbose=args.v)
+lgp = HumoroLGP(domain, problem, verbose=args.v, path_to_mogaze=DATASET_DIR, task_name=args.scenario, segment_id=args.id)
 init_time = time.time()
 print('Init time: ' + str(init_time - parse_time) + 's')
-lgp.plan()
-plan_time = time.time()
-print('Planning time: ' + str(plan_time - init_time) + 's')
-if args.v:
-    lgp.logic_planner.draw_tree()
-    lgp.workspace.draw_kinematic_tree()
-lgp.workspace.draw_workspace()
-lgp.draw_potential_heightmap()

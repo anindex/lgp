@@ -1,13 +1,15 @@
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from lgp.logic.tree import LGPTree
-from lgp.geometry.workspace import LGPWorkspace
+from lgp.logic.planner import LogicPlanner
+from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
 from pyrieef.geometry.pixel_map import sdf
+
+from humoro.hmp_interface import HumanRollout
 
 
 class LGP(object):
@@ -16,9 +18,9 @@ class LGP(object):
 
     def __init__(self, domain, problem, workspace_config, **kwargs):
         self.verbose = kwargs.get('verbose', False)
-        self.lgp_tree = LGPTree(domain, problem)
-        self.workspace = LGPWorkspace(workspace_config)
-        init_symbols = LGP.symbol_sanity_check(self.lgp_tree.init_state, self.workspace.symbolic_state)
+        self.logic_planner = LogicPlanner(domain, problem)
+        self.workspace = YamlWorkspace(workspace_config)
+        init_symbols = LGP.symbol_sanity_check(self.logic_planner.init_state, self.workspace.symbolic_state)
         self.workspace.set_init_robot_symbol(init_symbols)
         self.workspace.update_symbolic_state()
         # human motion API # TODO: this is where the wrapper to query human motion comes in
@@ -36,7 +38,7 @@ class LGP(object):
         if update:
             self.workspace.update_geometric_state()
             self.workspace.update_symbolic_state()
-        applied = LGPTree.applicable(self.workspace.symbolic_state, action.positive_preconditions, action.negative_preconditions)
+        applied = LogicPlanner.applicable(self.workspace.symbolic_state, action.positive_preconditions, action.negative_preconditions)
         if not applied:
             LGP.logger.error('Sanity check failed! Cannot perform action %s' % action.name)
             LGP.logger.info('Current workspace state: %s' % str(self.workspace.symbolic_state))
@@ -55,7 +57,7 @@ class LGP(object):
         self.workspace.clear_paths()
         # for now, always choose first plan
         plan_idx = 0
-        paths, act_seqs = self.lgp_tree.plan()
+        paths, act_seqs = self.logic_planner.plan()
         if self.verbose:
             for i, seq in enumerate(act_seqs):
                 LGP.logger.info('Solution %d:' % (i + 1))
@@ -69,9 +71,9 @@ class LGP(object):
         waypoints = {robot_frame: [(self.workspace.geometric_state[robot_frame], 0)] for robot_frame in self.workspace.robots}
         for action in act_seqs[plan_idx]:
             if action.name == 'move':
-                robot_frame, location_frame = action.parameters
+                robot_frame, location1_frame, location2_frame = action.parameters
                 t = len(waypoints[robot_frame]) * self.objective.T
-                waypoints[robot_frame].append((self.workspace.geometric_state[location_frame], t))
+                waypoints[robot_frame].append((self.workspace.geometric_state[location2_frame], t))
             else:
                 self.act(action, sanity_check=False)  # sanity check is not needed in planning ahead. This is only a projection of final effective space.
         for robot_frame in self.workspace.robots:
@@ -90,9 +92,6 @@ class LGP(object):
                 robot.paths.append(traj)  # add planned path
             else:
                 LGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
-
-    def dynamic_plan(self):
-        pass
 
     def draw_potential_heightmap(self, nb_points=100, show=True):
         fig = plt.figure(figsize=(8, 8))
@@ -121,7 +120,7 @@ class LGP(object):
         # geometrically sanity check
         if sanity_check and not self.action_precondition_check(action):
             return
-        robot_frame, location_frame = action.parameters  # location1 is only for symbol checking
+        robot_frame, location1_frame, location2_frame = action.parameters  # location1 is only for symbol checking
         robot = self.workspace.robots[robot_frame]
         # this is a handcrafted code for setting human as an obstacle.
         if ('avoid_human', robot_frame) in self.workspace.symbolic_state:
@@ -133,7 +132,7 @@ class LGP(object):
         # TODO: add more constrainst if needed
         # for now use location2 state as goal, but it should be specified geometrically
         self.objective.q_init = self.workspace.geometric_state[robot_frame]
-        self.objective.q_goal = self.workspace.geometric_state[location_frame]
+        self.objective.q_goal = self.workspace.geometric_state[location2_frame]
         self.objective.set_problem(workspace=self.workspace)
         reached, traj, grad, delta = self.objective.optimize()
         if reached:
@@ -172,12 +171,41 @@ class LGP(object):
         assert type(problem_symbols) == frozenset and type(workspace_symbols) == frozenset
         adding_symbols = problem_symbols.difference(workspace_symbols)
         for s in adding_symbols:
-            if s[0] in LGPWorkspace.DEDUCED_PREDICATES:
-                LGP.logger.warn('Adding symbol %s, which is not deduced by LGPWorkspace. This can be an inconsistence between initial geometric and symbolic states' % str(s))
-            if s[0] not in LGPWorkspace.SUPPORTED_PREDICATES:
-                LGP.logger.error('Adding symbol %s, which is not in supported predicates of LGPWorkspace!' % str(s))
+            if s[0] in YamlWorkspace.DEDUCED_PREDICATES:
+                LGP.logger.warn('Adding symbol %s, which is not deduced by YamlWorkspace. This can be an inconsistence between initial geometric and symbolic states' % str(s))
+            if s[0] not in YamlWorkspace.SUPPORTED_PREDICATES:
+                LGP.logger.error('Adding symbol %s, which is not in supported predicates of YamlWorkspace!' % str(s))
         return adding_symbols
 
     @property
     def supported_predicates(self):
         return self.workspace.SUPPORTED_PREDICATES
+
+
+class HumoroLGP(object):
+    logger = logging.getLogger(__name__)
+    SUPPORTED_ACTIONS = ('move', 'pick', 'place')
+
+    def __init__(self, domain, problem, **kwargs):
+        self.verbose = kwargs.get('verbose', False)
+        self.path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
+        self.task_name = kwargs.get('task_name', 'set_table')
+        self.segment_id = kwargs.get('segment_id', 1)
+        self.logic_planner = LogicPlanner(domain, problem)
+        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze), 
+                                         name=self.task_name)
+        self.workspace.initialize_workspace_from_humoro(self.segment_id)
+        init_symbols = HumoroLGP.symbol_sanity_check(self.logic_planner.init_state, self.workspace.symbolic_state)
+        self.workspace.set_init_robot_symbol(init_symbols)
+        self.objective = TrajectoryConstraintObjective(**kwargs)
+
+    @staticmethod
+    def symbol_sanity_check(problem_symbols, workspace_symbols):
+        assert type(problem_symbols) == frozenset and type(workspace_symbols) == frozenset
+        adding_symbols = problem_symbols.difference(workspace_symbols)
+        for s in adding_symbols:
+            if s[0] in HumoroWorkspace.DEDUCED_PREDICATES:
+                LGP.logger.warn('Adding symbol %s, which is not deduced by HumoroWorkspace. This can be an inconsistence between initial geometric and symbolic states' % str(s))
+            if s[0] not in HumoroWorkspace.SUPPORTED_PREDICATES:
+                LGP.logger.error('Adding symbol %s, which is not in supported predicates of HumoroWorkspace!' % str(s))
+        return adding_symbols
