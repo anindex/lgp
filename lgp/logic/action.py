@@ -131,6 +131,7 @@ class DurativeAction(Action):
         variables = self.get_variables()
         for assignment in itertools.product(*type_map):
             assignment_map = dict(zip(variables, assignment))
+            duration = int(self.duration)  # current works with integer timesteps
             start_positive_preconditions = Action.replace(self.start_positive_preconditions, assignment_map)
             start_negative_preconditions = Action.replace(self.start_negative_preconditions, assignment_map)
             end_positive_preconditions = Action.replace(self.end_positive_preconditions, assignment_map)
@@ -143,7 +144,7 @@ class DurativeAction(Action):
             end_del_effects = Action.replace(self.end_del_effects, assignment_map)
             add_effects = start_add_effects + end_add_effects
             del_effects = start_del_effects + end_del_effects
-            yield DurativeAction(name=self.name, parameters=assignment,
+            yield DurativeAction(name=self.name, parameters=assignment, duration=duration,
                                  positive_preconditions=positive_preconditions, negative_preconditions=negative_preconditions,
                                  start_positive_preconditions=start_positive_preconditions, start_negative_preconditions=start_negative_preconditions,
                                  end_positive_preconditions=end_positive_preconditions, end_negative_preconditions=end_negative_preconditions,

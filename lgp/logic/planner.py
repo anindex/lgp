@@ -12,25 +12,24 @@ class LogicPlanner(object):
         self.domain = domain
         self.problem = problem
         self.self_edge = self_edge
-        self.tree = nx.DiGraph(name=self.problem.name)
+        self.graph = nx.DiGraph(name=self.problem.name)
         self.init_state = self.problem.state
         self.goal_states = set()
         self.build_graph()
 
     def build_graph(self):
         '''
-        Build LGP tree from PDDL domain and problem
+        Build LGP graph from PDDL domain and problem
         '''
         positive_goals = self.problem.positive_goals
         negative_goals = self.problem.negative_goals
         state = self.problem.state
-        self.tree.clear()
+        self.graph.clear()
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         ground_actions = self.domain.ground_actions()
         # BFS Search to build paths
         fringe = deque()
         fringe.append(state)
-        visited = set()
         while fringe:
             state = fringe.popleft()
             for act in ground_actions:
@@ -38,30 +37,37 @@ class LogicPlanner(object):
                     new_state = LogicPlanner.apply(state, act.add_effects, act.del_effects)
                     if not self.self_edge and new_state == state:  # ignore same state transition
                         continue
-                    if new_state not in visited:
+                    if not self.graph.has_edge(state, new_state):
                         if LogicPlanner.check_goal(new_state, positive_goals, negative_goals):
                             self.goal_states.add(new_state)  # store goal states
-                        self.tree.add_edge(state, new_state, action=act)
+                        self.graph.add_edge(state, new_state, action=act)
                         fringe.append(new_state)
-                        visited.add(new_state)
+    
+    def resolve_inconsistencies(self, positives, negatives):
+        for p in positives:
+            if not self.graph.has_edge(p[0], p[1]):
+                self.graph.add_edge(p[0],  p[1], action=p[2])
+        for p in negatives:
+            if self.graph.has_edge(p[0], p[1]):
+                self.graph.remove_edge(p[0],  p[1])
 
     def plan(self, state=None):
-        if self.tree.size() == 0:
-            LogicPlanner.logger.warn('LGP Tree is not built yet! Plan nothing.')
+        if self.graph.size() == 0:
+            LogicPlanner.logger.warn('LGP graph is not built yet! Plan nothing.')
             return []
         if state is None:
             state = self.init_state
-        if not self.tree.has_node(state):
-            LogicPlanner.logger.warn('State: %s \n is not recognized in LGP tree! Plan nothing.' % str(state))
+        if not self.graph.has_node(state):
+            LogicPlanner.logger.warn('State: %s \n is not recognized in LGP graph! Plan nothing.' % str(state))
             return []
         paths = []
         act_seqs = []
-        path = nx.shortest_path(self.tree, source=state)
+        path = nx.shortest_path(self.graph, source=state)
         for g in self.goal_states:
             try:
                 p = path[g]
                 paths.append(p)
-                act_seq = [self.tree[p[i]][p[i + 1]]['action'] for i in range(len(p) - 1)]
+                act_seq = [self.graph[p[i]][p[i + 1]]['action'] for i in range(len(p) - 1)]
                 act_seqs.append(act_seq)
             except:  # noqa
                 LogicPlanner.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
@@ -72,7 +78,7 @@ class LogicPlanner(object):
         edge_color = None
         if paths is not None:
             edge_color = self._color_edges(paths)
-        nx.draw(self.tree, with_labels=label, node_color=node_color, edge_color=edge_color, font_size=5)
+        nx.draw(self.graph, with_labels=label, node_color=node_color, edge_color=edge_color, font_size=5)
         if show:
             plt.show()
 
@@ -80,7 +86,7 @@ class LogicPlanner(object):
         if init_state is None:
             init_state = self.init_state
         color_map = []
-        for n in self.tree:
+        for n in self.graph:
             if n == init_state:
                 color_map.append('green')
             elif n in self.goal_states:
@@ -92,7 +98,7 @@ class LogicPlanner(object):
     def _color_edges(self, paths):
         edges = tuple((p[i], p[i + 1]) for p in paths for i in range(len(p) - 1))
         edge_color = []
-        for e in self.tree.edges():
+        for e in self.graph.edges():
             if e in edges:
                 edge_color.append('red')
             else:
@@ -101,8 +107,8 @@ class LogicPlanner(object):
 
     @staticmethod
     def applicable(state, positive, negative):
-        positive = LogicPlanner.match_any(state, positive)
-        negative = LogicPlanner.match_any(state, negative)
+        # positive = LogicPlanner.match_any(state, positive)  # uncomment if ?* operator is in preconditions
+        # negative = LogicPlanner.match_any(state, negative)
         return positive.issubset(state) and negative.isdisjoint(state)
 
     @staticmethod

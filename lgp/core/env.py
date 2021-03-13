@@ -1,7 +1,7 @@
-from lgp.core.solver import LGP
+from lgp.core.solver import HumoroLGP
 
 
-class Environment(object):
+class HumoroEnvironment(object):
     def __init__(self, **kwargs):
         domain_file = kwargs.get('domain_file')
         problem_file = kwargs.get('problem_file')

@@ -18,7 +18,7 @@
 
   (:durative-action move
       :parameters (?l - location)
-      :duration (= ?duration (move-time ?l))
+      :duration (= ?duration 20)
       :precondition (at end (not (human-at ?l)))
       :effect (and (at end (not (agent-at ?*))) (at end (agent-at ?l)))
   )

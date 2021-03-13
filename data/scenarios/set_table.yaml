@@ -1,0 +1,29 @@
+# Rules:
+#   - all coordinates are as format [x, y]
+#   - 'world' is always the root of the workspace
+#   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
+#   - color is as format rgba
+# TODO: maybe implement x, y, phi kinematic later if needed
+workspace:
+  name: 'set_table'
+  segment_id: 0
+  window_len: 30
+  tree:
+    world:
+      origin: [0., 0.]
+      geometry: 
+        dim: [5., 5.]
+      property:
+        type_obj: 'env'
+        color: [1, 1, 1, 1]
+        movable: False
+      children:
+        - robot:
+            origin: [0., -1.2]
+            geometry:
+              radius: 0.1
+            property:
+              type_obj: 'robot'
+              color: [0, 1, 0, 1]
+              movable: True
+            children:
