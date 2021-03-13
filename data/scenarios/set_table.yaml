@@ -6,7 +6,7 @@
 # TODO: maybe implement x, y, phi kinematic later if needed
 workspace:
   name: 'set_table'
-  segment_id: 0
+  segment_id: 1
   window_len: 30
   tree:
     world:

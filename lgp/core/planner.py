@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from lgp.logic.planner import LogicPlanner
+from lgp.geometry.kinematic import Human, Robot
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
@@ -9,7 +10,12 @@ from lgp.optimization.objective import TrajectoryConstraintObjective
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
 from pyrieef.geometry.pixel_map import sdf
 
-from humoro.hmp_interface import HumanRollout
+# temporary importing until complication of install is resolve
+import os
+import sys
+_path_file = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(_path_file, "../../../humoro"))
+from examples.prediction.hmp_interface import HumanRollout
 
 
 class LGP(object):
@@ -206,6 +212,7 @@ class HumoroLGP(LGP):
         self.workspace_updated = True  # if workspace is updated by outside factors, the plan should be replanned
         self.t = 0  # current environment timestep
         self.elapsed_t = 0  # elapsed time since the last unchanged plan, should be reset to 0 when plan is changed
+        self.delta_t = 0  # computing for each iteration (used to get predicted human position)
 
     def set_current_symbolic_state(self, s):
         self.logic_planner.state = s
@@ -259,30 +266,31 @@ class HumoroLGP(LGP):
         if not self.verify_plan():
             HumoroLGP.logger.warn('Plan is infeasible at current time: %s. Trying replanning at next trigger.' % (self.t))
             return False
-        waypoints = {robot_frame: [(self.workspace.geometric_state[robot_frame], 0)] for robot_frame in self.workspace.robots}
-        for action in act_seqs[plan_idx]:
+        waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
+        t = 0
+        for i, action in enumerate(self.plan[1]):
             if action.name == 'move':
-                robot_frame, location1_frame, location2_frame = action.parameters
-                t = len(waypoints[robot_frame]) * self.objective.T
-                waypoints[robot_frame].append((self.workspace.geometric_state[location2_frame], t))
+                location_frame = action.parameters[0]
             else:
-                self.act(action, sanity_check=False)  # sanity check is not needed in planning ahead. This is only a projection of final effective space.
-        for robot_frame in self.workspace.robots:
-            robot = self.workspace.robots[robot_frame]
-            # this is a handcrafted code for setting human as an obstacle.
-            if ('avoid_human', robot_frame) in self.workspace.symbolic_state:
-                for human in self.human_predictor:
-                    self.workspace.obstacles[human] = self.human_predictor[human]
-            else:
-                for human in self.human_predictor:
-                    self.workspace.obstacles.pop(human, None)
-            trajectory = linear_interpolation_waypoints_trajectory(waypoints[robot_frame])
-            self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints[robot_frame])
-            reached, traj, grad, delta = self.objective.optimize()
-            if reached:
-                robot.paths.append(traj)  # add planned path
-            else:
-                HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
+                location_frame = action.parameters[1]
+            t += action.duration - (self.elapsed_t if i == 0 else 0)  
+            waypoints.append((self.workspace.geometric_state[location_frame], t))
+        robot = self.workspace.get_robot_link_obj()
+        # this is a handcrafted code for setting human as an obstacle.
+        if ('agent-avoid-human',) in self.workspace.symbolic_state:
+            segment = self.workspace.segments[self.segment_id]
+            human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t + self.delta_t)  # TODO: check this
+            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos)
+        else:
+            self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
+        trajectory = linear_interpolation_waypoints_trajectory(waypoints)
+        self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
+        reached, traj, grad, delta = self.objective.optimize()
+        if reached:
+            robot.paths.append(traj)  # add planned path
+        else:
+            HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
+            return False
         return True
 
     def check_verifying_action(self, action):

@@ -242,6 +242,7 @@ class HumoroWorkspace(YamlWorkspace):
     SUPPORTED_PREDICATES = ('agent-at', 'agent-avoid-human', 'agent-carry', 'agent-free', 'agent-avoid-human', 'on', 'human-at', 'human-carry')
     DEDUCED_PREDICATES = ('on', 'human-at', 'human-carry')
     VERIFY_PREDICATES = ('human-at', 'human-carry')
+    HUMAN_FRAME = 'human'
 
     def __init__(self, hr, config):
         super(HumoroWorkspace, self).__init__(config, init=False)
@@ -260,6 +261,9 @@ class HumoroWorkspace(YamlWorkspace):
 
     def get_robot_geometric_state(self):
         return self.geometric_state[self.robot_frame]
+    
+    def get_robot_link_obj(self):
+        return self.robots[self.robot_frame]
 
     def get_prediction_predicates(self, t):
         return self.hr.get_predicates(self.segment_id, t)
@@ -285,6 +289,7 @@ class HumoroWorkspace(YamlWorkspace):
             link_obj = OBJECT_MAP['box_obj'](origin=np.array(origin), dim=np.array([.20, .35]))
             self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., 1., .3, .1])
             self.kin_tree.add_edge(global_frame, obj)
+            self.workspace.obstables[obj] = link_obj
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
         origin = [pos[0] - .4, pos[1] - .4]
