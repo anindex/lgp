@@ -7,19 +7,21 @@
 workspace:
   name: 'set_table'
   segment_id: 1
-  window_len: 30
+  window_len: 480
+  fps: 120
+  ignore_objs: ['cup_red', 'cup_blue', 'cup_pink', 'plate_green', 'plate_red', 'plate_pink', 'bowl', 'jug']
   tree:
     world:
       origin: [0., 0.]
       geometry: 
-        dim: [5., 5.]
+        dim: [6., 6.]
       property:
         type_obj: 'env'
         color: [1, 1, 1, 1]
         movable: False
       children:
         - robot:
-            origin: [0., -1.2]
+            origin: [0., -3]
             geometry:
               radius: 0.1
             property:

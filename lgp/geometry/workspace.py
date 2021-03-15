@@ -68,7 +68,7 @@ class YamlWorkspace(Workspace):
     DEDUCED_PREDICATES = ('at', 'on', 'carry', 'free')
     GLOBAL_FRAME = 'world'
 
-    def __init__(self, config, init_symbol=None, init=True):
+    def __init__(self, config, init_symbol=None, init=True, **kwargs):
         self.name = config['name']
         self.robots = {}
         self.humans = {}
@@ -240,20 +240,23 @@ class YamlWorkspace(Workspace):
 class HumoroWorkspace(YamlWorkspace):
     logger = logging.getLogger(__name__)
     SUPPORTED_PREDICATES = ('agent-at', 'agent-avoid-human', 'agent-carry', 'agent-free', 'agent-avoid-human', 'on', 'human-at', 'human-carry')
-    DEDUCED_PREDICATES = ('on', 'human-at', 'human-carry')
+    DEDUCED_PREDICATES = ('on', 'human-at', 'human-carry', 'agent-at', 'agent-carry', 'agent-free')
     VERIFY_PREDICATES = ('human-at', 'human-carry')
     HUMAN_FRAME = 'human'
 
-    def __init__(self, hr, config):
-        super(HumoroWorkspace, self).__init__(config, init=False)
+    def __init__(self, hr, config, **kwargs):
+        super(HumoroWorkspace, self).__init__(config, **kwargs)
+        self.robot_model_file = kwargs.get('robot_model_file', 'data/models/cube.urdf')
         self.hr = hr
         self.segments = hr.get_data_segments()
         self.segment_id = config['segment_id']
+        self.ignore_objs = set(config['ignore_objs'])
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
+        self.constant_symbols = frozenset()
         self._symbolic_state = frozenset()
 
-    def set_init_robot_symbol(self, init_symbol):
-        self._symbolic_state = self._symbolic_state.union(init_symbol)
+    def set_constant_symbol(self, symbols):
+        self.constant_symbols = frozenset_of_tuples(symbols)
     
     def set_robot_geometric_state(self, state):
         self.kin_tree.nodes[self.robot_frame]['link_obj'].origin = np.array(state)
@@ -266,7 +269,7 @@ class HumoroWorkspace(YamlWorkspace):
         return self.robots[self.robot_frame]
 
     def get_prediction_predicates(self, t):
-        return self.hr.get_predicates(self.segment_id, t)
+        return self.hr.get_predicates(self.segments[self.segment_id], t)
 
     def clear_workspace(self):
         for n in self.kin_tree.nodes():
@@ -276,49 +279,65 @@ class HumoroWorkspace(YamlWorkspace):
     def initialize_workspace_from_humoro(self, segment_id):
         '''
         Initialize workspace using interface from humoro
+        NOTE: For now, no need to update movable objects pos, because deduced predicates are off-loaded to humoro
         '''
         global_frame = YamlWorkspace.GLOBAL_FRAME
         self.hr.load_for_playback(self.segments[segment_id])
+        self.hr.visualize_frame(self.segments[segment_id], 0)
         self.segment_id = segment_id
         self.clear_workspace()
         # obstables
         for obj in self.hr.obstacles:
             obj_id = self.hr.p._objects[obj]
             pos, _ = p.getBasePositionAndOrientation(obj_id)
-            origin = [pos[0] - .10, pos[1] - .175]
-            link_obj = OBJECT_MAP['box_obj'](origin=np.array(origin), dim=np.array([.20, .35]))
+            link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.20, .35]))
             self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., 1., .3, .1])
             self.kin_tree.add_edge(global_frame, obj)
-            self.workspace.obstables[obj] = link_obj
+            self.obstacles[obj] = link_obj
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
-        origin = [pos[0] - .4, pos[1] - .4]
-        link_obj = OBJECT_MAP['box_obj'](origin=np.array(origin), dim=np.array([.8, .8]))
+        link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.8, .8]))
         self.kin_tree.add_node('table', link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'table')
         # small_shelf
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['vesken_shelf'])
-        origin = [pos[0] - .18, pos[1] - .11]
-        link_obj = OBJECT_MAP['box_obj'](origin=np.array(origin), dim=np.array([.36, .22]))
+        link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.36, .22]))
         self.kin_tree.add_node('small_shelf', link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'small_shelf')
         # small_shelf
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['laiva_shelf'])
-        origin = [pos[0] - .30, pos[1] - .12]
-        link_obj = OBJECT_MAP['box_obj'](origin=np.array(origin), dim=np.array([.59, .24]))
+        link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.59, .24]))
         self.kin_tree.add_node('big_shelf', link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'big_shelf')
         # objects
-        for obj in self.hr.obj_names:
+        for obj in self.hr.objects:
             obj_id = self.hr.p._objects[obj]
             pos, _ = p.getBasePositionAndOrientation(obj_id)
             link_obj = OBJECT_MAP['point_obj'](origin=np.array(pos[:2]))
             self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='point_obj', movable=True, color=[0, 1, 1, 0.9])
             self.kin_tree.add_edge(global_frame, obj)
-        # init symbolic state
-        self._symbolic_state = frozenset_of_tuples(self.hr.get_predicates(self.segments[segment_id], 0))
         # init geometric state
         self.update_geometric_state()
+        # init symbolic state
+        self.update_workspace_symbols(0)
+        # init robot pos
+        self.hr.p.spawnRobot(self.robot_frame, urdf=self.robot_model_file)
+        p.resetBasePositionAndOrientation(self.hr.p._robots[self.robot_frame], [*self.get_robot_geometric_state(), 0], [0, 0, 0, 1])
+
+    def update_workspace_symbols(self, t):
+        preds = self.hr.get_predicates(self.segments[self.segment_id], t, robot_pos=self.get_robot_geometric_state())
+        preds = [p for p in preds if not (p[0] == 'on' and p[1] in self.ignore_objs)]  # ignore predicate 'on' of ignored objects
+        # deduce agent-carry
+        successors = self.kin_tree.successors(self.robot_frame)
+        agent_preds = [('agent-carry', obj) for obj in successors]
+        if agent_preds:
+            preds.extend(agent_preds)
+        else:
+            preds.append(('agent-free',))
+        self._symbolic_state = frozenset_of_tuples(preds)
+
+    def visualize_frame(self, t):
+        self.hr.visualize_frame(self.segments[self.segment_id], t)
 
     @property
     def symbolic_state(self):

@@ -13,7 +13,7 @@ class LogicPlanner(object):
         self.problem = problem
         self.self_edge = self_edge
         self.graph = nx.DiGraph(name=self.problem.name)
-        self.init_state = self.problem.state
+        self.current_state = self.problem.state
         self.goal_states = set()
         self.build_graph()
 
@@ -56,7 +56,7 @@ class LogicPlanner(object):
             LogicPlanner.logger.warn('LGP graph is not built yet! Plan nothing.')
             return []
         if state is None:
-            state = self.init_state
+            state = self.current_state
         if not self.graph.has_node(state):
             LogicPlanner.logger.warn('State: %s \n is not recognized in LGP graph! Plan nothing.' % str(state))
             return []
@@ -73,8 +73,8 @@ class LogicPlanner(object):
                 LogicPlanner.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
         return paths, act_seqs
 
-    def draw_tree(self, init_state=None, paths=None, label=True, show=True):
-        node_color = self._color_states(init_state)
+    def draw_tree(self, current_state=None, paths=None, label=True, show=True):
+        node_color = self._color_states(current_state)
         edge_color = None
         if paths is not None:
             edge_color = self._color_edges(paths)
@@ -82,12 +82,12 @@ class LogicPlanner(object):
         if show:
             plt.show()
 
-    def _color_states(self, init_state=None):
-        if init_state is None:
-            init_state = self.init_state
+    def _color_states(self, current_state=None):
+        if current_state is None:
+            current_state = self.current_state
         color_map = []
         for n in self.graph:
-            if n == init_state:
+            if n == current_state:
                 color_map.append('green')
             elif n in self.goal_states:
                 color_map.append('red')

@@ -2,10 +2,11 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from lgp.logic.planner import LogicPlanner
-from lgp.geometry.kinematic import Human, Robot
+from lgp.geometry.kinematics import Human, Robot
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
+from lgp.utils.helpers import frozenset_of_tuples
 
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
 from pyrieef.geometry.pixel_map import sdf
@@ -35,26 +36,12 @@ class LGP(object):
             self.human_predictor = self.workspace.humans
         self.objective = TrajectoryConstraintObjective(**kwargs)
         self.action_map = {
-            'move': self._move_action,
             'pick': self._pick_action,
             'place': self._place_action
         }
 
-    def action_precondition_check(self, action, update=False):
-        if update:
-            self.workspace.update_geometric_state()
-            self.workspace.update_symbolic_state()
-        applied = LogicPlanner.applicable(self.workspace.symbolic_state, action.positive_preconditions, action.negative_preconditions)
-        if not applied:
-            LGP.logger.error('Sanity check failed! Cannot perform action %s' % action.name)
-            LGP.logger.info('Current workspace state: %s' % str(self.workspace.symbolic_state))
-            LGP.logger.info('Action parameters: %s' % str(action.parameters))
-            LGP.logger.info('Action positive preconditions: %s' % str(action.positive_preconditions))
-            LGP.logger.info('Action negative preconditions: %s' % str(action.negative_preconditions))
-        return applied
-
-    def act(self, action, sanity_check=True):
-        return self.action_map[action.name](action, sanity_check=sanity_check)
+    def act(self, action):
+        return self.action_map[action.name](action)
 
     def plan(self):
         '''
@@ -119,61 +106,34 @@ class LGP(object):
         signed_dist_field = np.interp(signed_dist_field, (signed_dist_field.min(), signed_dist_field.max()), (0, max(self.workspace.box.dim)))
         return signed_dist_field
 
-    def _move_action(self, action, sanity_check=False):
-        '''
-        This only use for dynamic planning.
-        '''
-        # geometrically sanity check
-        if sanity_check and not self.action_precondition_check(action):
-            return
-        robot_frame, location1_frame, location2_frame = action.parameters  # location1 is only for symbol checking
-        robot = self.workspace.robots[robot_frame]
-        # this is a handcrafted code for setting human as an obstacle.
-        if ('avoid_human', robot_frame) in self.workspace.symbolic_state:
-            for human in self.human_predictor:
-                self.workspace.obstacles[human] = self.human_predictor[human]
-        else:
-            for human in self.human_predictor:
-                self.workspace.obstacles.pop(human, None)
-        # TODO: add more constrainst if needed
-        # for now use location2 state as goal, but it should be specified geometrically
-        self.objective.q_init = self.workspace.geometric_state[robot_frame]
-        self.objective.q_goal = self.workspace.geometric_state[location2_frame]
-        self.objective.set_problem(workspace=self.workspace)
-        reached, traj, grad, delta = self.objective.optimize()
-        if reached:
-            robot.paths.append(traj)  # add planned path
-        else:
-            LGP.logger.warn('Trajectory optim for action %s failed! Gradients: %s, delta: %s' % (action.parameters, grad, delta))
-
-    def _pick_action(self, action, sanity_check=False):
-        # geometrically sanity check
-        if sanity_check and not self.action_precondition_check(action):
-            return
+    def _pick_action(self, action):
         robot_frame, obj_frame, location = action.parameters
+        # check if current action is already executed
+        if self.workspace.kin_tree.has_edge(robot_frame, obj_frame):
+            return
         robot = self.workspace.robots[robot_frame]
         obj_property = self.workspace.kin_tree.nodes[obj_frame]
         robot.attach_object(obj_frame, obj_property['link_obj'])
         # update kinematic tree (attaching object at agent origin, this could change if needed)
         self.workspace.kin_tree.remove_edge(location, obj_frame)
         obj_property['link_obj'].origin = np.zeros(self.workspace.geometric_state_shape)
-        self.workspace.kin_tree.add_edge(robot_frame, obj_frame, **obj_property)
+        self.workspace.kin_tree.add_edge(robot_frame, obj_frame)
 
-    def _place_action(self, action, sanity_check=False):
-        # geometrically sanity check
-        if sanity_check and not self.action_precondition_check(action):
-            return
+    def _place_action(self, action):
         robot_frame, obj_frame, location = action.parameters
+        # check if current action is already executed
+        if not self.workspace.kin_tree.has_edge(robot_frame, obj_frame):
+            return
         robot = self.workspace.robots[robot_frame]
         obj_property = self.workspace.kin_tree.nodes[obj_frame]
         robot.drop_object(obj_frame)
         # update kinematic tree (attaching object at location origin, this could change if specifying a intermediate goal)
         self.workspace.kin_tree.remove_edge(robot_frame, obj_frame)
         obj_property['link_obj'].origin = np.zeros(self.workspace.geometric_state_shape)
-        self.workspace.kin_tree.add_edge(location, obj_frame, **obj_property)
+        self.workspace.kin_tree.add_edge(location, obj_frame)
 
     def symbol_sanity_check(self):
-        problem_symbols = self.logic_planner.init_state
+        problem_symbols = self.logic_planner.current_state
         workspace_symbols = self.workspace.symbolic_state
         assert type(problem_symbols) == frozenset and type(workspace_symbols) == frozenset
         adding_symbols = problem_symbols.difference(workspace_symbols)
@@ -201,22 +161,45 @@ class HumoroLGP(LGP):
         self.plan_id = config.get('plan_id', 0)  # for now, PDDL problem is designed so that there is only one solution.
         self.window_len = config.get('window_len', 30)
         self.logic_planner = LogicPlanner(domain, problem)  # this will also build feasibility graph
-        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze), 
-                                         config=config)
+        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=config['fps']), 
+                                         config=config, **kwargs)
         self.workspace.initialize_workspace_from_humoro(self.segment_id)
         init_symbols = self.symbol_sanity_check()
-        self.workspace.set_init_robot_symbol(init_symbols)
+        constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
+        self.workspace.set_constant_symbol(constant_symbols)
         self.objective = TrajectoryConstraintObjective(**kwargs)
         # dynamic parameters
         self.plan = None
-        self.workspace_updated = True  # if workspace is updated by outside factors, the plan should be replanned
         self.t = 0  # current environment timestep
-        self.elapsed_t = 0  # elapsed time since the last unchanged plan, should be reset to 0 when plan is changed
-        self.delta_t = 0  # computing for each iteration (used to get predicted human position)
-
-    def set_current_symbolic_state(self, s):
-        self.logic_planner.state = s
+        self.elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in plan is changed
+        # action map
+        self.action_map = {
+            'move': self._move_action,
+            'pick': self._pick_action,
+            'place': self._place_action
+        }
     
+    def check_verifying_action(self, action):
+        for p in action.positive_preconditions.union(action.negative_preconditions):
+            if p[0] in self.workspace.VERIFY_PREDICATES:
+                return True
+        return False
+
+    def check_action_precondition(self, action):
+        applied = LogicPlanner.applicable(self.logic_planner.current_state, action.positive_preconditions, action.negative_preconditions)
+        if not applied:
+            LGP.logger.error('Sanity check failed! Cannot perform action %s' % action.name)
+            LGP.logger.info('Current workspace state: %s' % str(self.workspace.symbolic_state))
+            LGP.logger.info('Action parameters: %s' % str(action.parameters))
+            LGP.logger.info('Action positive preconditions: %s' % str(action.positive_preconditions))
+            LGP.logger.info('Action negative preconditions: %s' % str(action.negative_preconditions))
+        return applied
+
+    def update_current_symbolic_state(self):
+        self.workspace.update_workspace_symbols(self.t)
+        verify_preds = [p for p in self.workspace.symbolic_state if p[0] in self.workspace.VERIFY_PREDICATES]
+        self.logic_planner.current_state = self.workspace.symbolic_state.difference(frozenset_of_tuples(verify_preds)).union(self.workspace.constant_symbols)
+
     def verify_plan(self):
         '''
         For now, only action move relies on predicate predictions.
@@ -252,11 +235,9 @@ class HumoroLGP(LGP):
         '''
         This function will plan a full path conditioned on action skeleton sequence from initial symbolic & geometric states
         '''
-        # for now, always choose first plan
-        if self.workspace_updated:
-            paths, act_seqs = self.logic_planner.plan()
-            self.plan = [paths[self.plan_id], act_seqs[self.plan_id]]
-            self.elapsed_t = 0
+        robot = self.workspace.get_robot_link_obj()
+        paths, act_seqs = self.logic_planner.plan()
+        self.plan = [paths[self.plan_id], act_seqs[self.plan_id]]  
         if self.verbose:
             for i, seq in enumerate(act_seqs):
                 HumoroLGP.logger.info('Solution %d:' % (i + 1))
@@ -265,6 +246,7 @@ class HumoroLGP(LGP):
         # verify path using symbolic traj
         if not self.verify_plan():
             HumoroLGP.logger.warn('Plan is infeasible at current time: %s. Trying replanning at next trigger.' % (self.t))
+            robot.paths.clear()
             return False
         waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
         t = 0
@@ -273,13 +255,15 @@ class HumoroLGP(LGP):
                 location_frame = action.parameters[0]
             else:
                 location_frame = action.parameters[1]
-            t += action.duration - (self.elapsed_t if i == 0 else 0)  
-            waypoints.append((self.workspace.geometric_state[location_frame], t))
-        robot = self.workspace.get_robot_link_obj()
+            t += action.duration - (self.elapsed_t if i == 0 else 0)
+            if i == 0 and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
+                waypoints.append((self.workspace.get_robot_geometric_state(), t))
+            else:
+                waypoints.append((self.workspace.geometric_state[location_frame], t))
         # this is a handcrafted code for setting human as an obstacle.
         if ('agent-avoid-human',) in self.workspace.symbolic_state:
             segment = self.workspace.segments[self.segment_id]
-            human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t + self.delta_t)  # TODO: check this
+            human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
             self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos)
         else:
             self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
@@ -293,8 +277,57 @@ class HumoroLGP(LGP):
             return False
         return True
 
-    def check_verifying_action(self, action):
-        for p in act.positive_preconditions.union(act.negative_preconditions):
-            if p[0] in self.workspace.VERIFY_PREDICATES:
-                return True
-        return False
+    def act(self, action, **kwargs):
+        return self.action_map[action.name](action, **kwargs)
+
+    def _move_action(self, action, sanity_check=True):
+        '''
+        Move the robot to next point in path plan (one timestep).
+        '''
+        # geometrically sanity check
+        if sanity_check and not self.check_action_precondition(action):
+            return
+        # currently there is only one path
+        robot = self.workspace.get_robot_link_obj()
+        self.workspace.set_robot_geometric_state(robot.paths[0][self.elapsed_t + 1])
+
+    def _pick_action(self, action, sanity_check=True):
+        # geometrically sanity check
+        if sanity_check and not self.check_action_precondition(action):
+            return
+        obj_frame, location_frame = action.parameters
+        # check if current action is already executed
+        if self.workspace.kin_tree.has_edge(robot_frame, obj_frame):
+            return
+        robot = self.workspace.get_robot_link_obj()
+        obj_property = self.workspace.kin_tree.nodes[obj_frame]
+        robot.attach_object(obj_frame, obj_property['link_obj'])
+        # update kinematic tree (attaching object at agent origin, this could change if needed)
+        if self.workspace.kin_tree.has_edge((location_frame, obj_frame)):
+            self.workspace.kin_tree.remove_edge(location_frame, obj_frame)
+        obj_property['link_obj'].origin = np.zeros(self.workspace.geometric_state_shape)
+        self.workspace.kin_tree.add_edge(robot_frame, obj_frame)
+
+    def _place_action(self, action, place_pos=None, sanity_check=True):
+        '''
+        Place action: place_pos is a global coordinate
+        '''
+        # geometrically sanity check
+        if sanity_check and not self.check_action_precondition(action):
+            return
+        obj_frame, location_frame = action.parameters
+        # check if current action is already executed
+        if not self.workspace.kin_tree.has_edge(robot_frame, obj_frame):
+            return
+        robot = self.workspace.get_robot_link_obj()
+        obj_property = self.workspace.kin_tree.nodes[obj_frame]
+        robot.drop_object(obj_frame)
+        # update kinematic tree (attaching object at location place_pos)
+        self.workspace.kin_tree.remove_edge(robot_frame, obj_frame)
+        if place_pos is None:
+            place_pos = np.zeros(self.workspace.geometric_state_shape)
+        obj_property['link_obj'].origin = place_pos
+        self.workspace.kin_tree.add_edge(location, obj_frame)
+
+    def visualize(self):
+        self.workspace.visualize_frame(self.t)
