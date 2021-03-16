@@ -28,8 +28,8 @@ config_file = join(DATA_DIR, args.scenario + '.yaml')
 robot_model_file = join(MODEL_DIR, 'r2d2.urdf')
 
 start_time = time.time()
-lgp = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, config_file=config_file, robot_model_file=robot_model_file, trigger_period=30)
+lgp = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, config_file=config_file, 
+                       robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR, verbose=args.v)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
 lgp.run()
-input()

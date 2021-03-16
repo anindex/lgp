@@ -13,6 +13,8 @@ class LogicPlanner(object):
         self.problem = problem
         self.self_edge = self_edge
         self.graph = nx.DiGraph(name=self.problem.name)
+        # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
+        self.ground_actions = self.domain.ground_actions()
         self.current_state = self.problem.state
         self.goal_states = set()
         self.build_graph()
@@ -25,14 +27,12 @@ class LogicPlanner(object):
         negative_goals = self.problem.negative_goals
         state = self.problem.state
         self.graph.clear()
-        # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
-        ground_actions = self.domain.ground_actions()
         # BFS Search to build paths
         fringe = deque()
         fringe.append(state)
         while fringe:
             state = fringe.popleft()
-            for act in ground_actions:
+            for act in self.ground_actions:
                 if LogicPlanner.applicable(state, act.positive_preconditions, act.negative_preconditions):
                     new_state = LogicPlanner.apply(state, act.add_effects, act.del_effects)
                     if not self.self_edge and new_state == state:  # ignore same state transition
@@ -51,15 +51,23 @@ class LogicPlanner(object):
             if self.graph.has_edge(p[0], p[1]):
                 self.graph.remove_edge(p[0],  p[1])
 
-    def plan(self, state=None):
+    def plan(self, state=None, shortest_path=False):
         if self.graph.size() == 0:
             LogicPlanner.logger.warn('LGP graph is not built yet! Plan nothing.')
-            return []
+            return [], []
         if state is None:
             state = self.current_state
         if not self.graph.has_node(state):
-            LogicPlanner.logger.warn('State: %s \n is not recognized in LGP graph! Plan nothing.' % str(state))
-            return []
+            # check if current state could connected to feasibility graph
+            for act in self.ground_actions:
+                if LogicPlanner.applicable(state, act.positive_preconditions, act.negative_preconditions):
+                    new_state = LogicPlanner.apply(state, act.add_effects, act.del_effects)
+                    if new_state == state:  # ignore same state transition
+                        continue
+                    self.graph.add_edge(state, new_state, action=act)
+            if not self.graph.has_node(state):
+                LogicPlanner.logger.warn('State: %s \n is not recognized in LGP graph. Could not find feasible path from this state to goal!.' % str(state))
+                return [], []
         paths = []
         act_seqs = []
         path = nx.shortest_path(self.graph, source=state)
@@ -71,7 +79,11 @@ class LogicPlanner(object):
                 act_seqs.append(act_seq)
             except:  # noqa
                 LogicPlanner.logger.warn('No path found between source %s and goal %s' % (str(state), str(g)))
+        if shortest_path and act_seqs:
+            i = min(enumerate([len(seq) for seq in act_seqs]), key=itemgetter(1))[0]
+            return [paths[i]], [act_seqs[i]]
         return paths, act_seqs
+            
 
     def draw_tree(self, current_state=None, paths=None, label=True, show=True):
         node_color = self._color_states(current_state)
