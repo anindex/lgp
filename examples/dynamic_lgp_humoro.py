@@ -18,13 +18,14 @@ from lgp.core.dynamic import HumoroDynamicLGP
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python lgp_planner_humoro.py set_table')
 parser.add_argument('scenario', help='The scenario name of the domain, problem file', type=str)
-parser.add_argument('-id', help='Segment id in the MoGaze dataset', type=int, default=1)
+parser.add_argument('-p', help='Segment id in the MoGaze dataset', type=str, default='1')
+parser.add_argument('-sid', help='Segment id in the MoGaze dataset', type=int, default=1)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 
 domain_file = join(DATA_DIR, 'domain_' + args.scenario + '.pddl')
-problem_file = join(DATA_DIR, 'problem_' + args.scenario + '.pddl')
-config_file = join(DATA_DIR, args.scenario + '.yaml')
+problem_file = join(DATA_DIR, 'problem_' + args.scenario + args.p + '.pddl')
+config_file = join(DATA_DIR, args.scenario + args.p + '.yaml')
 robot_model_file = join(MODEL_DIR, 'r2d2.urdf')
 
 start_time = time.time()

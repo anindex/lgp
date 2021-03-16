@@ -3,7 +3,7 @@
   (:types location object)
   (:constants
     table small_shelf big_shelf - location
-    plate_blue - object
+    cup_red cup_green cup_blue cup_pink plate_pink plate_red plate_green plate_blue jug bowl - object
   )
   (:predicates
     (agent-at ?l - location)

@@ -17,10 +17,12 @@ class Domain(object):
         self.actions = kwargs.get('actions', {})
         self.extensions = kwargs.get('extensions', {})
 
-    def ground_actions(self):
+    def ground_actions(self, objects={}):
+        if not objects:
+            objects = self.constants
         grounded_actions = []
         for action in self.actions.values():
-            for act in action.groundify(self.constants, self.types):
+            for act in action.groundify(objects, self.types):
                 grounded_actions.append(act)
         return grounded_actions
 

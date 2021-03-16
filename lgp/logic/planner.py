@@ -14,7 +14,7 @@ class LogicPlanner(object):
         self.self_edge = self_edge
         self.graph = nx.DiGraph(name=self.problem.name)
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
-        self.ground_actions = self.domain.ground_actions()
+        self.ground_actions = self.domain.ground_actions(problem.objects)
         self.current_state = self.problem.state
         self.goal_states = set()
         self.build_graph()
