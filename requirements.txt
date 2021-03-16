@@ -1,4 +1,6 @@
 matplotlib
 networkx
 scipy
+pyyaml
+pybullet
 git+git://github.com/humans-to-robots-motion/pyrieef

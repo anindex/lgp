@@ -9,7 +9,7 @@ workspace:
   segment_id: 1
   window_len: 40
   sim_fps: 120
-  fps: 20
+  fps: 10
   objects: ['plate_blue', 'cup_green']
   tree:
     world:
