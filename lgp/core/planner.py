@@ -170,7 +170,7 @@ class HumoroLGP(LGP):
         init_symbols = self.symbol_sanity_check()
         constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
         self.workspace.set_constant_symbol(constant_symbols)
-        self.objective = TrajectoryConstraintObjective(**kwargs)
+        self.objective = TrajectoryConstraintObjective(dt=1/self.fps, **kwargs)
         # dynamic parameters
         self.plan = None
         self.t = 0  # current environment timestep
