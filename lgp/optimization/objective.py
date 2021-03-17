@@ -3,6 +3,13 @@ import numpy as np
 from scipy import optimize
 
 from pyrieef.geometry.workspace import Circle, Box
+
+
+# temporary importing until complication of install is resolve
+import os
+import sys
+_path_file = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(_path_file, "../../../bewego"))
 from pybewego import MotionObjective
 
 

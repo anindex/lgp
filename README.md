@@ -23,6 +23,16 @@ cd ../lgp
 pip install -r requirements.txt
 ```
 
+Also clone `bewego` into `masterthesis` folder:
+```bash
+cd masterthesis
+git clone https://github.com/humans-to-robots-motion/bewego
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYBIND11_PYTHON_VERSION=3.5
+make
+make install
+```
+
 Finally, please download [MoGaze](https://humans-to-robots-motion.github.io/mogaze/) dataset and unzip it into `lgp/datasets/mogaze`.
 
 ## Usage
