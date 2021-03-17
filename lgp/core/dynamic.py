@@ -88,8 +88,9 @@ class HumoroDynamicLGP(DynamicLGP):
         robot = self.humoro_lgp.workspace.get_robot_link_obj()
         current_robot_pos = self.humoro_lgp.workspace.get_robot_geometric_state()
         try:
-            z_angle = get_angle(current_robot_pos - self.prev_robot_pos, np.array([1, 0]))  # angle of current path gradient with y axis
-            current_q = p.getQuaternionFromEuler([0, 0, z_angle])
+            grad = current_robot_pos - self.prev_robot_pos
+            z_angle = get_angle(grad, np.array([0, 1]))  # angle of current path gradient with y axis
+            current_q = p.getQuaternionFromEuler([0, 0, z_angle if grad[0] < 0 else -z_angle])
             self.prev_robot_q = current_q
         except:
             current_q = self.prev_robot_q
