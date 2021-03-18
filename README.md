@@ -8,13 +8,13 @@ This assumes you a;ready install the dependencies for Simon's master thesis repo
 Clone Simon's master thesis repo:
 
 ```bash
-git clone git@animal.informatik.uni-stuttgart.de:simon.hagenmayer/masterthesis.git
+git clone git@animal.informatik.uni-stuttgart.de:simon.hagenmayer/hierarchical-hmp.git
 ```
 
-Then, clone `humoro` and `lgp` to `masterthesis` folder, checkout `MASimon` branch on `humoro` and install dependencies of `lgp`:
+Then, clone `humoro` and `lgp` to `hierarchical-hmp` folder, checkout `MASimon` branch on `humoro` and install dependencies of `lgp`:
 
 ```bash
-cd masterthesis
+cd hierarchical-hmp
 git clone git@animal.informatik.uni-stuttgart.de:philippkratzer/humoro.git
 git clone https://github.com/humans-to-robots-motion/lgp
 cd humoro
@@ -23,9 +23,9 @@ cd ../lgp
 pip install -r requirements.txt
 ```
 
-Also clone `bewego` into `masterthesis` folder:
+Also clone `bewego` into `hierarchical-hmp` folder:
 ```bash
-cd masterthesis
+cd hierarchical-hmp
 git clone https://github.com/humans-to-robots-motion/bewego --recursive
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
