@@ -6,6 +6,8 @@ from operator import itemgetter
 import os
 import sys
 import pickle
+
+from lgp.logic.astar import astar
 _path_file = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -105,16 +107,11 @@ class LogicPlanner(object):
         paths = []
         act_seqs = []
         for goal in self.goal_states:
-            try:
-                # current_paths = list(nx.all_shortest_paths(self.graph, source=state, target=goal))
-                path = nx.astar_path(self.graph, source=state, target=goal, heuristic=self.heuristic)
-                current_paths = [path]
-                paths.extend(current_paths)
-                for path in current_paths:
-                    act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
-                    act_seqs.append(act_seq)
-            except:  # noqa
-                LogicPlanner.logger.warn('No path found between source %s and goal %s' % (str(state), str(goal)))
+            current_paths = astar(self.graph, source=state, target=goal, heuristic=self.heuristic)
+            paths.extend(current_paths)
+            for path in current_paths:
+                act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
+                act_seqs.append(act_seq)
         if shortest_path and act_seqs:
             i = min(enumerate([len(seq) for seq in act_seqs]), key=itemgetter(1))[0]
             return [paths[i]], [act_seqs[i]]
