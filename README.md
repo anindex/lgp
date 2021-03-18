@@ -8,14 +8,14 @@ This assumes you a;ready install the dependencies for Simon's master thesis repo
 Clone Simon's master thesis repo:
 
 ```bash
-git clone https://animal.informatik.uni-stuttgart.de/simon.hagenmayer/masterthesis
+git clone git@animal.informatik.uni-stuttgart.de:simon.hagenmayer/hierarchical-hmp.git
 ```
 
-Then, clone `humoro` and `lgp` to `masterthesis` folder, checkout `MASimon` branch on `humoro` and install dependencies of `lgp`:
+Then, clone `humoro` and `lgp` to `hierarchical-hmp` folder, checkout `MASimon` branch on `humoro` and install dependencies of `lgp`:
 
 ```bash
-cd masterthesis
-git clone https://animal.informatik.uni-stuttgart.de/philippkratzer/humoro
+cd hierarchical-hmp
+git clone git@animal.informatik.uni-stuttgart.de:philippkratzer/humoro.git
 git clone https://github.com/humans-to-robots-motion/lgp
 cd humoro
 git checkout MASimon
@@ -23,17 +23,23 @@ cd ../lgp
 pip install -r requirements.txt
 ```
 
-Also clone `bewego` into `masterthesis` folder:
+Also clone `bewego` into `hierarchical-hmp` folder:
 ```bash
-cd masterthesis
+cd hierarchical-hmp
 git clone https://github.com/humans-to-robots-motion/bewego --recursive
 mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYBIND11_PYTHON_VERSION=3.5
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make
 make install
 ```
 
 Finally, please download [MoGaze](https://humans-to-robots-motion.github.io/mogaze/) dataset and unzip it into `lgp/datasets/mogaze`.
+```bash
+mkdir -p datasets && cd datasets
+wget https://ipvs.informatik.uni-stuttgart.de/mlr/philipp/mogaze/mogaze.zip
+unzip mogaze.zip
+```
+
 And also run this script to initialize Pepper URDF:
 
 ```
@@ -49,7 +55,7 @@ They are tested on MoGaze dataset segment 1. This runs `set_table1`:
 
 ```bash
 cd lgp
-python3 examples/dynamic_lgp_humoro.py -p 1 -v True
+python3 examples/dynamic_lgp_humoro.py set_table -p 1 -v True
 ```
 
 Change to `-p 2` to run `set_table2`. And `-v` is verbose flag. 
