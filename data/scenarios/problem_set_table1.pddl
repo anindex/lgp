@@ -1,6 +1,6 @@
 (define (problem set_table1)
     (:domain set_table)
-    (:constants
+    (:objects
         table small_shelf big_shelf - location
         plate_blue - object
     )

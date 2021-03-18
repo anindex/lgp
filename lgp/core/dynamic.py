@@ -66,7 +66,7 @@ class HumoroDynamicLGP(DynamicLGP):
 
     def __init__(self, **kwargs):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
-        self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config['workspace'], **kwargs)
+        self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config, **kwargs)
         # parameters
         self.trigger_period = kwargs.get('trigger_period', 5)  # timesteps
         self.timeout = kwargs.get('timeout', 20)  # seconds

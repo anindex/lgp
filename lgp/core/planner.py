@@ -156,15 +156,16 @@ class HumoroLGP(LGP):
     def __init__(self, domain, problem, config, **kwargs):
         self.verbose = kwargs.get('verbose', False)
         self.path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
-        self.task_name = config.get('name', 'set_table')
-        self.segment_id = config['segment_id']
-        self.window_len = config.get('window_len', 30)  # frames, according to this sampling fps
-        self.sim_fps = config['sim_fps']  # simulation fps
-        self.fps = config['fps']  # sampling fps
+        workspace_config = config['workspace']
+        self.task_name = workspace_config.get('name', 'set_table')
+        self.segment_id = workspace_config['segment_id']
+        self.window_len = workspace_config.get('window_len', 30)  # frames, according to this sampling fps
+        self.sim_fps = workspace_config['sim_fps']  # simulation fps
+        self.fps = workspace_config['fps']  # sampling fps
         self.ratio = int(self.sim_fps / self.fps)
-        self.logic_planner = LogicPlanner(domain, problem)  # this will also build feasibility graph
-        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=config['sim_fps']), 
-                                         config=config, **kwargs)
+        self.logic_planner = LogicPlanner(domain, problem, **config['logic'])  # this will also build feasibility graph
+        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=self.sim_fps), 
+                                         config=workspace_config, **kwargs)
         self.workspace.initialize_workspace_from_humoro(self.segment_id)
         self.player = self.workspace.hr.p
         init_symbols = self.symbol_sanity_check()

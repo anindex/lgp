@@ -13,11 +13,12 @@ from lgp.logic.planner import LogicPlanner  # noqa
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python logic_planner.py set_table')
 parser.add_argument('scenario', help='The scenario name of the domain and problem file', type=str)
+parser.add_argument('-p', help='problem number', type=str, default='3')
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 
 domain_file = join(DATA_DIR, 'domain_' + args.scenario + '.pddl')
-problem_file = join(DATA_DIR, 'problem_' + args.scenario + '.pddl')
+problem_file = join(DATA_DIR, 'problem_' + args.scenario + args.p + '.pddl')
 
 start_time = time.time()
 domain = PDDLParser.parse_domain(domain_file)
