@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Also clone `bewego` into `masterthesis` folder:
 ```bash
 cd masterthesis
-git clone https://github.com/humans-to-robots-motion/bewego
+git clone https://github.com/humans-to-robots-motion/bewego --recursive
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYBIND11_PYTHON_VERSION=3.5
 make
