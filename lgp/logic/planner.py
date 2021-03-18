@@ -3,6 +3,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
 from operator import itemgetter
+import os
+import sys
+import pickle
+_path_file = os.path.dirname(os.path.realpath(__file__))
 
 
 class LogicPlanner(object):
@@ -13,16 +17,30 @@ class LogicPlanner(object):
         self.problem = problem
         self.self_edge = self_edge
         self.graph = nx.DiGraph(name=self.problem.name)
+        self.cache_path = os.path.join(_path_file, '../../data/caches')
+        self.cache_name = os.path.join(self.cache_path, self.problem.name + '.gpickle')
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         self.ground_actions = self.domain.ground_actions(problem.objects)
         self.current_state = self.problem.state
         self.goal_states = set()
         self.build_graph()
 
+    def check_cache(self):
+        return os.path.isfile(self.cache_name)
+
+    def save_cache(self):
+        nx.save
+
     def build_graph(self):
         '''
         Build LGP graph from PDDL domain and problem
         '''
+        # check if cache exists
+        if self.check_cache():
+            with open(self.cache_name, 'rb') as f:
+                data = pickle.load(f)
+                self.graph, self.goal_states = data['graph'], data['goals']
+            return
         positive_goals = self.problem.positive_goals
         negative_goals = self.problem.negative_goals
         state = self.problem.state
@@ -42,6 +60,8 @@ class LogicPlanner(object):
                             self.goal_states.add(new_state)  # store goal states
                         self.graph.add_edge(state, new_state, action=act)
                         fringe.append(new_state)
+        with open(self.cache_name, 'wb') as f:
+            pickle.dump({'graph': self.graph, 'goals': self.goal_states}, f)
     
     def resolve_inconsistencies(self, positives, negatives):
         for p in positives:
