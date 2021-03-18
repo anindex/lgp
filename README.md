@@ -34,6 +34,12 @@ make install
 ```
 
 Finally, please download [MoGaze](https://humans-to-robots-motion.github.io/mogaze/) dataset and unzip it into `lgp/datasets/mogaze`.
+And also run this script to initialize Pepper URDF:
+
+```
+cd lgp
+python3 examples/init_pepper.py
+```
 
 ## Usage
 

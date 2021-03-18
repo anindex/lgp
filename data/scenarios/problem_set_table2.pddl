@@ -1,4 +1,4 @@
-(define (problem set_table_prob)
+(define (problem set_table2)
     (:domain set_table)
     (:constants
         table small_shelf big_shelf - location

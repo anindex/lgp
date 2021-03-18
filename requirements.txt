@@ -3,4 +3,5 @@ networkx
 scipy
 pyyaml
 pybullet
+qibullet
 git+git://github.com/humans-to-robots-motion/pyrieef

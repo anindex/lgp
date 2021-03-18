@@ -5,7 +5,7 @@
 #   - color is as format rgba
 # TODO: maybe implement x, y, phi kinematic later if needed
 workspace:
-  name: 'set_table'
+  name: 'set_table1'
   segment_id: 1
   window_len: 40
   sim_fps: 120
