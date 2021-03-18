@@ -90,7 +90,7 @@ class HumoroDynamicLGP(DynamicLGP):
         try:
             grad = current_robot_pos - self.prev_robot_pos
             z_angle = get_angle(grad, np.array([0, 1]))  # angle of current path gradient with y axis
-            current_q = p.getQuaternionFromEuler([0, 0, z_angle if grad[0] < 0 else -z_angle])
+            current_q = p.getQuaternionFromEuler([0, 0, (z_angle if grad[0] < 0 else -z_angle) + np.pi / 2])  # + pi/2 due to default orientation of pepper is x-axis
             self.prev_robot_q = current_q
         except:
             current_q = self.prev_robot_q
@@ -105,7 +105,8 @@ class HumoroDynamicLGP(DynamicLGP):
                 p.resetBasePositionAndOrientation(self.player._objects[obj], [*obj_pos, 0.8], [0, 0, 0, 1])  # currently ignore object orientation
             elif robot.couplings:
                 for obj in robot.couplings:
-                    p.resetBasePositionAndOrientation(self.player._objects[obj], [*current_robot_pos, 0.7], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
+                    handling_pos = current_robot_pos + np.array([0.3, 0.2])
+                    p.resetBasePositionAndOrientation(self.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
     def run(self):
         '''
