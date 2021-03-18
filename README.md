@@ -28,7 +28,7 @@ Also clone `bewego` into `masterthesis` folder:
 cd masterthesis
 git clone https://github.com/humans-to-robots-motion/bewego --recursive
 mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPYBIND11_PYTHON_VERSION=3.5
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make
 make install
 ```
