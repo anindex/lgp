@@ -21,6 +21,7 @@ class LogicPlanner(object):
         self.ignore_cache = kwargs.get('ignore_cache', False)
         self.graph = nx.DiGraph(name=self.problem.name)
         self.cache_path = os.path.join(_path_file, '../../data/caches')
+        os.makedirs(self.cache_path, exist_ok=True)
         self.cache_name = os.path.join(self.cache_path, self.problem.name + '.gpickle')
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
         self.ground_actions = self.domain.ground_actions(problem.objects)
