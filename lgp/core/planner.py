@@ -158,6 +158,7 @@ class HumoroLGP(LGP):
         self.path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
         workspace_config = config['workspace']
         self.task_name = workspace_config.get('name', 'set_table')
+        self.task_id = workspace_config['task_id']
         self.segment_id = workspace_config['segment_id']
         self.window_len = workspace_config.get('window_len', 30)  # frames, according to this sampling fps
         self.sim_fps = workspace_config['sim_fps']  # simulation fps
@@ -166,7 +167,7 @@ class HumoroLGP(LGP):
         self.logic_planner = LogicPlanner(domain, problem, **config['logic'])  # this will also build feasibility graph
         self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=self.sim_fps), 
                                          config=workspace_config, **kwargs)
-        self.workspace.initialize_workspace_from_humoro(self.segment_id)
+        self.workspace.initialize_workspace_from_humoro(self.task_id, self.segment_id)
         self.player = self.workspace.hr.p
         init_symbols = self.symbol_sanity_check()
         constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
@@ -262,7 +263,7 @@ class HumoroLGP(LGP):
         '''
         robot = self.workspace.get_robot_link_obj()
         self.clear_plan()
-        paths, act_seqs = self.logic_planner.plan(shortest_path=True)
+        paths, act_seqs = self.logic_planner.plan()
         # check logic planning successful
         if paths and act_seqs:
             self.plan = [paths[0], act_seqs[0]]

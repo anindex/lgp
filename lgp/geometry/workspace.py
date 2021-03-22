@@ -249,9 +249,10 @@ class HumoroWorkspace(YamlWorkspace):
         super(HumoroWorkspace, self).__init__(config, init=False, **kwargs)
         self.robot_model_file = kwargs.get('robot_model_file', 'data/models/cube.urdf')
         self.hr = hr
-        self.segments = hr.get_data_segments()
-        self.segment_id = config['segment_id']
-        self.duration = self.segments[self.segment_id][2] - self.segments[self.segment_id][1]
+        self.task_id = 0
+        self.segment_id = 1
+        self.segments = []
+        self.duration = 0
         self.objects = set(config['objects'])
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
         self.human_frame = 'Human1'
@@ -292,15 +293,18 @@ class HumoroWorkspace(YamlWorkspace):
             if n != self.robot_frame and n != YamlWorkspace.GLOBAL_FRAME:
                 self.kin_tree.remove_node(n)
 
-    def initialize_workspace_from_humoro(self, segment_id):
+    def initialize_workspace_from_humoro(self, task_id, segment_id):
         '''
         Initialize workspace using interface from humoro
         '''
-        global_frame = self.GLOBAL_FRAME
-        self.hr.load_for_playback(self.segments[segment_id])
-        self.hr.visualize_frame(self.segments[segment_id], 0)
+        self.task_id = task_id
         self.segment_id = segment_id
-        self.duration = self.segments[self.segment_id][2] - self.segments[self.segment_id][1]
+        self.segments = self.hr.get_data_segments(taskid=task_id)
+        segment = self.segments[self.segment_id]
+        self.duration = segment[2] - segment[1]
+        global_frame = self.GLOBAL_FRAME
+        self.hr.load_for_playback(segment)
+        self.hr.visualize_frame(segment, 0)
         self.clear_workspace()
         # obstables
         for obj in self.hr.obstacles:
@@ -346,7 +350,7 @@ class HumoroWorkspace(YamlWorkspace):
                     self.kin_tree.add_edge(global_frame, obj)
                 self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='point_obj', movable=True, color=[0, 1, 1, 0.9])
         # human
-        human_pos = self.hr.get_human_pos_2d(self.segments[self.segment_id], 0)
+        human_pos = self.hr.get_human_pos_2d(segment, 0)
         link_obj = OBJECT_MAP['human'](origin=np.array(human_pos))
         self.kin_tree.add_node(self.human_frame, link_obj=link_obj, type_obj='human', movable=True, color=[0, 0, 1, 0.9])
         self.kin_tree.add_edge(global_frame, self.human_frame)

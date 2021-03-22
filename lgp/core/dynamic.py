@@ -69,7 +69,7 @@ class HumoroDynamicLGP(DynamicLGP):
         self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config, **kwargs)
         # parameters
         self.trigger_period = kwargs.get('trigger_period', 5)  # timesteps
-        self.timeout = kwargs.get('timeout', 20)  # seconds
+        self.timeout = kwargs.get('timeout', 100)  # seconds
         # useful variables
         self.player = self.humoro_lgp.workspace.hr.p
         self.robot_frame = self.humoro_lgp.workspace.robot_frame

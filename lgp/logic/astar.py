@@ -83,7 +83,7 @@ def astar(G, source, target, heuristic=None, weight="weight"):
             enqueued[neighbor] = ncost, h
             heappush(queue, (ncost + h, next(c), neighbor, ncost, curnode))
     # goal not reached
-    raise ValueError(f"Node {target} not reachable from {source}")
+    return []
 
 
 if __name__ == '__main__':

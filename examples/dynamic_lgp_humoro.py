@@ -19,7 +19,6 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                  description='Example run: python lgp_planner_humoro.py set_table')
 parser.add_argument('scenario', help='The scenario name of the domain, problem file', type=str)
 parser.add_argument('-p', help='problem number', type=str, default='1')
-parser.add_argument('-sid', help='Segment id in the MoGaze dataset', type=int, default=1)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 

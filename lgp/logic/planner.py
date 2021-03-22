@@ -88,7 +88,7 @@ class LogicPlanner(object):
                 h += 1
         return h
 
-    def plan(self, state=None, shortest_path=False):
+    def plan(self, state=None):
         if self.graph.size() == 0:
             LogicPlanner.logger.warn('LGP graph is not built yet! Plan nothing.')
             return [], []
@@ -108,14 +108,13 @@ class LogicPlanner(object):
         paths = []
         act_seqs = []
         for goal in self.goal_states:
-            current_paths = astar(self.graph, source=state, target=goal, heuristic=self.heuristic)
-            paths.extend(current_paths)
-            for path in current_paths:
+            try:
+                path = nx.astar_path(self.graph, source=state, target=goal, heuristic=self.heuristic)
+                paths.append(path)
                 act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
                 act_seqs.append(act_seq)
-        if shortest_path and act_seqs:
-            i = min(enumerate([len(seq) for seq in act_seqs]), key=itemgetter(1))[0]
-            return [paths[i]], [act_seqs[i]]
+            except:
+                LogicPlanner.logger.warn(f'{goal} is not reachable from {state}.')
         return paths, act_seqs
 
     def draw_tree(self, current_state=None, paths=None, label=True, show=True):

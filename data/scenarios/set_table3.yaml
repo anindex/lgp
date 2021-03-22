@@ -3,15 +3,14 @@
 #   - 'world' is always the root of the workspace
 #   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
 #   - color is as format rgba
-# TODO: maybe implement x, y, phi kinematic later if needed
 workspace:
-  name: 'set_table1'
-  task_id: 0
-  segment_id: 1
-  window_len: 40
+  name: 'set_table3'
+  task_id: 2
+  segment_id: 17
+  window_len: 50
   sim_fps: 120
-  fps: 20
-  objects: ['plate_blue']
+  fps: 10
+  objects: ['cup_red', 'cup_green', 'cup_blue', 'plate_red', 'plate_blue', 'plate_green', 'bowl']
   tree:
     world:
       origin: [0., 0.]
