@@ -6,7 +6,6 @@ from lgp.geometry.kinematics import Human, Robot, PointObject
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.optimization.objective import TrajectoryConstraintObjective
-from lgp.utils.helpers import frozenset_of_tuples
 
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
 from pyrieef.geometry.pixel_map import sdf
@@ -160,7 +159,6 @@ class HumoroLGP(LGP):
         self.task_name = workspace_config.get('name', 'set_table')
         self.task_id = workspace_config['task_id']
         self.segment_id = workspace_config['segment_id']
-        self.window_len = workspace_config.get('window_len', 30)  # frames, according to this sampling fps
         self.sim_fps = workspace_config['sim_fps']  # simulation fps
         self.fps = workspace_config['fps']  # sampling fps
         self.ratio = int(self.sim_fps / self.fps)
@@ -168,23 +166,29 @@ class HumoroLGP(LGP):
         self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=self.sim_fps), 
                                          config=workspace_config, **kwargs)
         self.workspace.initialize_workspace_from_humoro(self.task_id, self.segment_id)
+        self.window_len = workspace_config.get('window_len', 'max')  # frames, according to this sampling fps
+        if self.window_len == 'max':
+            self.window_len = int(self.workspace.duration * self.workspace.fraction_duration / self.ratio)
         self.player = self.workspace.hr.p
         init_symbols = self.symbol_sanity_check()
         constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
         self.workspace.set_constant_symbol(constant_symbols)
         self.objective = TrajectoryConstraintObjective(dt=1/self.fps, **kwargs)
         # dynamic parameters
-        self.plan = None
-        self.t = 0  # current environment timestep
-        self.lgp_t = 0  # lgp time 
-        self.elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in plan is changed
-        self.prev_first_action = None
+        self.reset()
         # action map
         self.action_map = {
             'move': self._move_action,
             'pick': self._pick_action,
             'place': self._place_action
         }
+
+    def reset(self):
+        self.clear_plan()
+        self.t = 0  # current environment timestep
+        self.lgp_t = 0  # lgp time 
+        self.elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in plan is changed
+        self.prev_first_action = None
 
     def clear_plan(self):
         self.workspace.get_robot_link_obj().paths.clear()
@@ -222,16 +226,18 @@ class HumoroLGP(LGP):
             if self.lgp_t % self.ratio == 0:
                 self.elapsed_t += 1
 
-    def verify_plan(self):
+    def verify_plan(self, plan=None):
         '''
         For now, only action move relies on predicate predictions.
         This function should be extended to account for other actions that rely on predicate predictions.
         This checks for over all and end time preconditions.
         '''
-        if self.plan is None:
-            return False
+        if plan is None:
+            if self.plan is None:
+                return False
+            plan = self.plan
         current_t = 0
-        for i, a in enumerate(self.plan[1]):
+        for i, a in enumerate(plan[1]):
             if self.check_verifying_action(a):
                 # print('Action: ', a.name + ' ' + ' '.join(a.parameters))
                 # start precondition
@@ -257,16 +263,88 @@ class HumoroLGP(LGP):
                     break
         return True
 
-    def dynamic_plan(self):
+    def symbolic_plan(self, update_goal=True, verify_plan=True):
+        '''
+        This function plan the feasible symbolic trajectory
+        update_goal according to human prediction
+        '''
+        self.clear_plan()
+        if update_goal:  # change goal to prune robot actions
+            for t in range(self.window_len):
+                symbols = self.workspace.get_prediction_predicates(t * self.ratio)
+                obj = self._get_human_carry_obj(symbols)
+                if obj is not None:
+                    p = self._get_predicate_on_obj(self.logic_planner.problem.positive_goals[0], obj)  # for now there is only + goals                    
+                    if p is not None and p not in self.logic_planner.current_state:
+                        neg_p = self._get_predicate_on_obj(self.logic_planner.current_state, obj)
+                        if neg_p is not None:
+                            self.logic_planner.current_state = self.logic_planner.current_state.difference(frozenset([neg_p]))
+                        self.logic_planner.current_state = self.logic_planner.current_state.union(frozenset([p]))
+        paths, act_seqs = self.logic_planner.plan(alternative=True)
+        for path, acts in zip(paths, act_seqs):
+            plan = (path, acts)
+            if verify_plan:
+                if self.verify_plan(plan=plan):  # always choose first plan that is valid, because alternative plans have the same action length
+                    self.plan = plan
+                    return True
+            else:
+                self.plan = plan
+                return True
+        return False
+
+    def geometric_plan(self):
+        '''
+        This function plan geometric trajectory
+        '''
+        if self.plan is None:
+            HumoroLGP.logger.warn('Symbolic plan is empty. Cannot plan trajectory!')
+            return False
+        waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
+        t = 0
+        running_t = -self.elapsed_t 
+        for action in self.plan[1]:
+            if t + action.duration > self.elapsed_t:
+                if action.name == 'move':
+                    location_frame = action.parameters[0]
+                else:
+                    location_frame = action.parameters[1]
+                running_t += action.duration
+                if t < self.elapsed_t and t + action.duration > self.elapsed_t and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
+                    waypoints.append((self.workspace.get_robot_geometric_state(), running_t))
+                else:
+                    waypoints.append((self.workspace.geometric_state[location_frame], running_t))
+            t += action.duration
+        if len(waypoints) == 1:
+            HumoroLGP.logger.warn(f'Elapsed time: {self.elapsed_t} is larger than total time: {t} of original plan!')
+            return False
+        # this is a handcrafted code for setting human as an obstacle.
+        if ('agent-avoid-human',) in self.logic_planner.current_state:
+            segment = self.workspace.segments[self.segment_id]
+            human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
+            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.3)
+        else:
+            self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
+        trajectory = linear_interpolation_waypoints_trajectory(waypoints)
+        self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
+        reached, traj, grad, delta = self.objective.optimize()
+        # check geometric planning successful
+        if reached:
+            robot = self.workspace.get_robot_link_obj()
+            robot.paths.append(traj)  # add planned path
+        else:
+            HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
+            return False
+        return True
+
+    def dynamic_plan(self, single_plan=False):
         '''
         This function will plan a full path conditioned on action skeleton sequence from initial symbolic & geometric states
         '''
-        robot = self.workspace.get_robot_link_obj()
         self.clear_plan()
         paths, act_seqs = self.logic_planner.plan()
         # check logic planning successful
         if paths and act_seqs:
-            self.plan = [paths[0], act_seqs[0]]
+            self.plan = (paths[0], act_seqs[0])  # we always have one plan for now
         else:
             HumoroLGP.logger.warn('Logic planning failed at current time: %s. Trying replanning at next trigger.' % (self.t))
             return False
@@ -285,38 +363,25 @@ class HumoroLGP(LGP):
         if self.prev_first_action != current_first_action:
             self.elapsed_t = 0
             self.prev_first_action = current_first_action
-        waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
-        t = 0
-        for i, action in enumerate(self.plan[1]):
-            if action.name == 'move':
-                location_frame = action.parameters[0]
-            else:
-                location_frame = action.parameters[1]
-            t += action.duration - (self.elapsed_t if i == 0 else 0)
-            if i == 0 and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
-                waypoints.append((self.workspace.get_robot_geometric_state(), t))
-            else:
-                waypoints.append((self.workspace.geometric_state[location_frame], t))
-        # this is a handcrafted code for setting human as an obstacle.
-        if ('agent-avoid-human',) in self.logic_planner.current_state:
-            segment = self.workspace.segments[self.segment_id]
-            human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
-            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.3)
-        else:
-            self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
-        trajectory = linear_interpolation_waypoints_trajectory(waypoints)
-        self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
-        reached, traj, grad, delta = self.objective.optimize()
-        # check geometric planning successful
-        if reached:
-            robot.paths.append(traj)  # add planned path
-        else:
-            HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
-            self.plan = None
-            return False
-        return True
+        success = self.geometric_plan()
+        return success
 
-    def act(self, action, **kwargs):
+    def get_current_action(self):
+        if self.plan is None:
+            HumoroLGP.logger.warn('Symbolic plan is empty. Cannot get current action!')
+            return None
+        t = 0
+        for action in self.plan[1]:
+            if t + action.duration > self.elapsed_t:
+                return action
+            t += action.duration
+        return None
+
+    def act(self, action=None, **kwargs):
+        if action is None: # execute current action
+            action = self.get_current_action()
+            if action is None:  # if elapsed_t is greater than total time of the plan
+                return
         return self.action_map[action.name](action, **kwargs)
 
     def _move_action(self, action, sanity_check=True):
@@ -370,6 +435,24 @@ class HumoroLGP(LGP):
             place_pos = np.zeros(self.workspace.geometric_state_shape)
         obj_property['link_obj'] = PointObject(origin=place_pos)
         self.workspace.kin_tree.add_edge(location_frame, obj_frame)
+
+    def _get_human_carry_obj(self, s):
+        '''
+        Assuming human carries only one object
+        '''
+        for p in s:
+            if p[0] == 'human-carry':
+                return p[1]
+        return None
+    
+    def _get_predicate_on_obj(self, s, obj):
+        '''
+        Assuming object on only one place
+        '''
+        for p in s:
+            if p[0] == 'on' and p[1] == obj:
+                return p
+        return None
 
     def visualize(self):
         self.workspace.visualize_frame(self.t)

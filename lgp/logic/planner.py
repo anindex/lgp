@@ -88,7 +88,7 @@ class LogicPlanner(object):
                 h += 1
         return h
 
-    def plan(self, state=None):
+    def plan(self, state=None, alternative=False):
         if self.graph.size() == 0:
             LogicPlanner.logger.warn('LGP graph is not built yet! Plan nothing.')
             return [], []
@@ -109,10 +109,17 @@ class LogicPlanner(object):
         act_seqs = []
         for goal in self.goal_states:
             try:
-                path = nx.astar_path(self.graph, source=state, target=goal, heuristic=self.heuristic)
-                paths.append(path)
-                act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
-                act_seqs.append(act_seq)
+                if alternative:
+                    all_paths = [path for path in nx.all_shortest_paths(self.graph, source=state, target=goal)]
+                    paths.extend(all_paths)
+                    for path in all_paths:
+                        act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
+                        act_seqs.append(act_seq)
+                else:
+                    path = nx.astar_path(self.graph, source=state, target=goal, heuristic=self.heuristic)
+                    paths.append(path)
+                    act_seq = [self.graph[path[i]][path[i + 1]]['action'] for i in range(len(path) - 1)]
+                    act_seqs.append(act_seq)
             except:
                 LogicPlanner.logger.warn(f'{goal} is not reachable from {state}.')
         return paths, act_seqs

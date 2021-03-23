@@ -253,6 +253,7 @@ class HumoroWorkspace(YamlWorkspace):
         self.segment_id = 1
         self.segments = []
         self.duration = 0
+        self.fraction_duration = config.get('fraction_duration', 1.0)
         self.objects = set(config['objects'])
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
         self.human_frame = 'Human1'
@@ -272,7 +273,7 @@ class HumoroWorkspace(YamlWorkspace):
         return self.robots[self.robot_frame]
 
     def get_prediction_predicates(self, t):
-        if t > self.duration:
+        if t > int(self.duration * self.fraction_duration):
             return []
         return self.hr.get_predicates(self.segments[self.segment_id], t)
 
@@ -366,7 +367,7 @@ class HumoroWorkspace(YamlWorkspace):
         '''
         Update workspace with human pos and movable objects (for now all are global coordinate)
         '''
-        if t > self.duration:
+        if t > int(self.duration * self.fraction_duration):
             return
         human_pos = self.hr.get_human_pos_2d(self.segments[self.segment_id], t)
         self.kin_tree.nodes[self.human_frame]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))

@@ -98,8 +98,8 @@ class HumoroDynamicLGP(DynamicLGP):
         p.resetBasePositionAndOrientation(self.player._robots[self.robot_frame], [*current_robot_pos, 0], current_q)
         # update object
         if self.humoro_lgp.plan is not None:
-            current_action = self.humoro_lgp.plan[1][0]
-            if current_action.name == 'place':
+            current_action = self.humoro_lgp.get_current_action()
+            if current_action is not None and current_action.name == 'place':
                 obj, location = current_action.parameters
                 obj_pos = self.humoro_lgp.workspace.geometric_state[location]  # TODO: should be desired place_pos on location, or add an animation of placing here
                 p.resetBasePositionAndOrientation(self.player._objects[obj], [*obj_pos, 0.8], [0, 0, 0, 1])  # currently ignore object orientation
@@ -108,7 +108,36 @@ class HumoroDynamicLGP(DynamicLGP):
                     handling_pos = current_robot_pos + np.array([0.3, 0.2])
                     p.resetBasePositionAndOrientation(self.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
-    def run(self):
+    def run(self, geometric_replan=False):
+        self.humoro_lgp.update_current_symbolic_state()
+        success = self.humoro_lgp.symbolic_plan(verify_plan=False)
+        success = self.humoro_lgp.geometric_plan()
+        if not success:
+            HumoroDynamicLGP.logger.info('Task failed!')
+            return
+        max_t = max(self.humoro_lgp.workspace.duration, self.humoro_lgp.ratio * self.humoro_lgp.objective.T)
+        while self.humoro_lgp.lgp_t < max_t:
+            if geometric_replan and (self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0):
+                success = self.humoro_lgp.geometric_plan()
+                # self.humoro_lgp.workspace.draw_workspace()
+                # self.humoro_lgp.draw_potential_heightmap()
+            if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
+                # executing first action in the plan
+                if success:
+                    self.humoro_lgp.act(sanity_check=False)
+                self.humoro_lgp.update_workspace()
+                # reflecting changes in PyBullet
+                self.update_visualization()
+            self.humoro_lgp.visualize()
+            self.humoro_lgp.increase_timestep()
+            time.sleep(1 / self.humoro_lgp.sim_fps)
+        self.humoro_lgp.update_current_symbolic_state()
+        if self.check_goal_reached():
+            HumoroDynamicLGP.logger.info('Task complete successfully!')
+        else:
+            HumoroDynamicLGP.logger.info('Task failed!')
+
+    def dynamic_run(self):
         '''
         Main dynamic LGP planning routine
         '''

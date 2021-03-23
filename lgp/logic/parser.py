@@ -253,7 +253,7 @@ class PDDLParser(object):
     @staticmethod
     def split_durative_predicates(group, name, part):
         if not group:
-            return [], []
+            return [], [], [], []
         start_positive, start_negative = [], []
         end_positive, end_negative = [], []
         if group[0] == 'and':

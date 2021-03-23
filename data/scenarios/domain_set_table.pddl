@@ -7,7 +7,6 @@
   )
   (:predicates
     (agent-at ?l - location)
-    (human-at ?l - location)
     (on ?x - object ?l - location)
     (agent-free)
     (agent-avoid-human)
@@ -19,13 +18,13 @@
   (:durative-action move
       :parameters (?l - location)
       :duration (= ?duration 40)
-      :precondition (at end (not (human-at ?l)))
+      :precondition ()
       :effect (and (at end (not (agent-at ?*))) (at end (agent-at ?l)))
   )
   (:durative-action pick
       :parameters (?x - object ?l - location)
       :duration (= ?duration 5)
-      :precondition (and (at end (agent-at ?l)) (at end (on ?x ?l)) (at start (agent-free))) 
+      :precondition (and (at end (agent-at ?l)) (at end (on ?x ?l)) (at end (not (human-carry ?x))) (at start (agent-free))) 
       :effect (and (at end (not (on ?x ?l))) (at end (not (agent-free))) (at end (agent-carry ?x)))
   )
   (:durative-action place
