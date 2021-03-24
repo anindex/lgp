@@ -7,10 +7,11 @@ workspace:
   name: 'set_table3'
   task_id: 2
   segment_id: 17
-  window_len: 50
+  window_len: 'max'
   sim_fps: 120
   fps: 10
   objects: ['cup_red', 'cup_green', 'cup_blue', 'plate_red', 'plate_blue', 'plate_green', 'bowl']
+  human_carry: 4
   tree:
     world:
       origin: [0., 0.]

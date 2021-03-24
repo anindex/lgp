@@ -168,7 +168,7 @@ class HumoroLGP(LGP):
         self.workspace.initialize_workspace_from_humoro(self.task_id, self.segment_id)
         self.window_len = workspace_config.get('window_len', 'max')  # frames, according to this sampling fps
         if self.window_len == 'max':
-            self.window_len = int(self.workspace.duration * self.workspace.fraction_duration / self.ratio)
+            self.window_len = int(self.workspace.duration / self.ratio)
         self.player = self.workspace.hr.p
         init_symbols = self.symbol_sanity_check()
         constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]

@@ -253,7 +253,7 @@ class HumoroWorkspace(YamlWorkspace):
         self.segment_id = 1
         self.segments = []
         self.duration = 0
-        self.fraction_duration = config.get('fraction_duration', 1.0)
+        self.human_carry = config.get('human_carry', 3)
         self.objects = set(config['objects'])
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
         self.human_frame = 'Human1'
@@ -273,7 +273,7 @@ class HumoroWorkspace(YamlWorkspace):
         return self.robots[self.robot_frame]
 
     def get_prediction_predicates(self, t):
-        if t > int(self.duration * self.fraction_duration):
+        if t > self.duration:
             return []
         return self.hr.get_predicates(self.segments[self.segment_id], t)
 
@@ -294,15 +294,21 @@ class HumoroWorkspace(YamlWorkspace):
             if n != self.robot_frame and n != YamlWorkspace.GLOBAL_FRAME:
                 self.kin_tree.remove_node(n)
 
-    def initialize_workspace_from_humoro(self, task_id, segment_id):
+    def initialize_workspace_from_humoro(self, task_id, segment_id, human_carry=None, prediction=False):
         '''
         Initialize workspace using interface from humoro
         '''
+        if human_carry is None:
+            human_carry = self.human_carry
         self.task_id = task_id
         self.segment_id = segment_id
         self.segments = self.hr.get_data_segments(taskid=task_id)
         segment = self.segments[self.segment_id]
-        self.duration = segment[2] - segment[1]
+        if prediction:
+            fraction = 1.0
+        else:
+            fraction = self.hr.get_fraction_duration(segment, human_carry)
+        self.duration = self.hr.get_segment_timesteps(segment) * fraction
         global_frame = self.GLOBAL_FRAME
         self.hr.load_for_playback(segment)
         self.hr.visualize_frame(segment, 0)
@@ -367,10 +373,9 @@ class HumoroWorkspace(YamlWorkspace):
         '''
         Update workspace with human pos and movable objects (for now all are global coordinate)
         '''
-        if t > int(self.duration * self.fraction_duration):
-            return
-        human_pos = self.hr.get_human_pos_2d(self.segments[self.segment_id], t)
-        self.kin_tree.nodes[self.human_frame]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))
+        if t <= self.duration:
+            human_pos = self.hr.get_human_pos_2d(self.segments[self.segment_id], t)
+            self.kin_tree.nodes[self.human_frame]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))
         for obj in self.objects:
             if obj in self.hr.p._objects:
                 if self.kin_tree.has_edge(self.robot_frame, obj):  # ignore carrying objects

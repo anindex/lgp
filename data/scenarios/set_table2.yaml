@@ -7,7 +7,7 @@ workspace:
   name: 'set_table2'
   task_id: 0
   segment_id: 1
-  # window_len: 40
+  window_len: 40
   sim_fps: 120
   fps: 10
   objects: ['plate_blue', 'cup_green']
