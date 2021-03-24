@@ -5,6 +5,7 @@ from lgp.logic.planner import LogicPlanner
 from lgp.geometry.kinematics import Human, Robot, PointObject
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
+from lgp.geometry.geometry import get_closest_point_on_circle
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
@@ -238,30 +239,35 @@ class HumoroLGP(LGP):
             if self.plan is None:
                 return False
             plan = self.plan
-        current_t = 0
-        for i, a in enumerate(plan[1]):
-            if self.check_verifying_action(a):
-                # print('Action: ', a.name + ' ' + ' '.join(a.parameters))
-                # start precondition
-                start = True
-                if not (i == 0 and self.symbolic_elapsed_t != 0):  # don't check for start precondition for currently executing first action
-                    p = self.workspace.get_prediction_predicates(self.t + current_t * self.ratio)
-                    start = LogicPlanner.applicable(p, a.start_positive_preconditions, a.start_negative_preconditions)
-                    # print('Start: ', p, a.start_positive_preconditions, a.start_negative_preconditions, self.t + current_t)
-                # TODO: implement check for over all precondition when needed 
-                # end precondition
-                current_t += a.duration - (self.symbolic_elapsed_t if i == 0 else 0)
-                if current_t > self.window_len:  # don't verify outside window
-                    break
-                p = self.workspace.get_prediction_predicates(self.t + current_t * self.ratio)
-                end = LogicPlanner.applicable(p, a.end_positive_preconditions, a.end_negative_preconditions)
-                # print('End: ', p, a.end_positive_preconditions, a.end_negative_preconditions, self.t + current_t)
-                # print('Result: ', start and end)
-                if not (start and end):
-                    return False
+        plan_t = -self.symbolic_elapsed_t
+        for action in plan[1]:
+            if plan_t + action.duration > 0:
+                if self.check_verifying_action(action):
+                    # print('Action: ', action.name + ' ' + ' '.join(action.parameters))
+                    # start precondition
+                    start = True
+                    if not (plan_t < 0 and plan_t + action.duration > 0):  # don't check for start precondition for currently executing first action
+                        p = self.workspace.get_prediction_predicates(self.t + plan_t * self.ratio)
+                        start = LogicPlanner.applicable(p, action.start_positive_preconditions, action.start_negative_preconditions)
+                        # print('Start: ', p, action.start_positive_preconditions, action.start_negative_preconditions, self.t + plan_t)
+                    # TODO: implement check for over all precondition when needed 
+                    # end precondition
+                    plan_t += action.duration
+                    if plan_t > self.window_len:  # don't verify outside window
+                        break
+                    p = self.workspace.get_prediction_predicates(self.t + plan_t * self.ratio)
+                    end = LogicPlanner.applicable(p, action.end_positive_preconditions, action.end_negative_preconditions)
+                    # print('End: ', p, action.end_positive_preconditions, action.end_negative_preconditions, self.t + plan_t)
+                    # print('Result: ', start and end)
+                    if not (start and end):
+                        return False
+                else:
+                    plan_t += action.duration
+                    if plan_t > self.window_len:  # don't verify outside window
+                        break
             else:
-                current_t += a.duration - (self.symbolic_elapsed_t if i == 0 else 0)
-                if current_t > self.window_len:  # don't verify outside window
+                plan_t += action.duration
+                if plan_t > self.window_len:  # don't verify outside window
                     break
         return True
 
@@ -304,7 +310,9 @@ class HumoroLGP(LGP):
         if self.plan is None:
             HumoroLGP.logger.warn('Symbolic plan is empty. Cannot plan trajectory!')
             return False
-        waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
+        prev_p = self.workspace.get_robot_geometric_state()
+        prev_pivot = prev_p
+        waypoints = [(prev_p, 0)]
         t = -self.symbolic_elapsed_t 
         for action in self.plan[1]:
             if t + action.duration > 0:
@@ -312,10 +320,16 @@ class HumoroLGP(LGP):
                     location_frame = action.parameters[0]
                 else:
                     location_frame = action.parameters[1]
-                if t < self.symbolic_elapsed_t and t + action.duration > self.symbolic_elapsed_t and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
+                if t < 0 and t + action.duration > 0 and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
                     waypoints.append((self.workspace.get_robot_geometric_state(), t + action.duration))
+                elif action.name == 'move':
+                    limit_circle = self.workspace.kin_tree.nodes[location_frame]['limit']
+                    p = get_closest_point_on_circle(prev_pivot, limit_circle)
+                    waypoints.append((p, t + action.duration))
+                    prev_p = p
+                    prev_pivot = self.workspace.geometric_state[location_frame]
                 else:
-                    waypoints.append((self.workspace.geometric_state[location_frame], t + action.duration))
+                    waypoints.append((prev_p, t + action.duration))
             t += action.duration
         if len(waypoints) == 1:
             HumoroLGP.logger.warn(f'Elapsed time: {self.symbolic_elapsed_t} is larger than total time: {t} of original plan!')
@@ -324,7 +338,7 @@ class HumoroLGP(LGP):
         if ('agent-avoid-human',) in self.logic_planner.current_state:
             segment = self.workspace.segments[self.segment_id]
             human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
-            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.3)
+            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.4)
         else:
             self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
         trajectory = linear_interpolation_waypoints_trajectory(waypoints)

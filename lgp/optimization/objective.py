@@ -38,8 +38,8 @@ class TrajectoryConstraintObjective:
         self.waypoints = kwargs.get('waypoints', None)
         self.eq_constraints = kwargs.get('eq_constraints', {})
         self.ineq_constraints = kwargs.get('ineq_constraints', {})
-        self.s_velocity_norm = kwargs.get('s_velocity_norm', 1) / self.dt # optimizer implementation specific
-        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 1) / self.dt  # optimizer implementation specific
+        self.s_velocity_norm = kwargs.get('s_velocity_norm', 0.005) / self.dt # optimizer implementation specific
+        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 0.01) / self.dt  # optimizer implementation specific
         self.s_obstacles = kwargs.get('s_obstacles', 5)
         self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 10)
         self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 1)

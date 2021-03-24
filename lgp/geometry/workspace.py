@@ -324,21 +324,27 @@ class HumoroWorkspace(YamlWorkspace):
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.8, .8]))
-        area = Circle(origin=np.array(pos[:2]), radius=1.0)
-        self.kin_tree.add_node('table', link_obj=link_obj, area=area, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
+        area = Circle(origin=np.array(pos[:2]), radius=1.05)
+        limit = Circle(origin=np.array(pos[:2]), radius=1.0)
+        self.kin_tree.add_node('table', link_obj=link_obj, area=area, limit=limit, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'table')
+        self.obstacles['table'] = link_obj
         # small_shelf
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['vesken_shelf'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.36, .22]))
-        area = Circle(origin=np.array(pos[:2]), radius=0.7)
-        self.kin_tree.add_node('small_shelf', link_obj=link_obj, area=area, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
+        area = Circle(origin=np.array(pos[:2]), radius=0.75)
+        limit = Circle(origin=np.array(pos[:2]), radius=0.7)
+        self.kin_tree.add_node('small_shelf', link_obj=link_obj, area=area, limit=limit, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'small_shelf')
+        self.obstacles['small_shelf'] = link_obj
         # big_shelf
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['laiva_shelf'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.24, .59]))
-        area = Circle(origin=np.array(pos[:2]), radius=0.8)
-        self.kin_tree.add_node('big_shelf', link_obj=link_obj, area=area, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
+        area = Circle(origin=np.array(pos[:2]), radius=0.85)
+        limit = Circle(origin=np.array(pos[:2]), radius=0.8)
+        self.kin_tree.add_node('big_shelf', link_obj=link_obj, area=area, limit=limit, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'big_shelf')
+        self.obstacles['big_shelf'] = link_obj
         self.locations = set(['table', 'small_shelf', 'big_shelf'])
         self.update_geometric_state()
         # objects
@@ -413,7 +419,7 @@ class HumoroWorkspace(YamlWorkspace):
             preds.extend(agent_preds)
         else:
             preds.append(('agent-free',))
-        location = self.get_location(self.get_robot_geometric_state())
+        location = self.get_area(self.get_robot_geometric_state())
         if location != 'unknown':
             preds.append(('agent-at', location))
         self._symbolic_state = frozenset_of_tuples(preds).union(self.constant_symbols)

@@ -5,6 +5,7 @@ import logging
 from lgp.utils.helpers import load_yaml_config
 from lgp.logic.parser import PDDLParser
 from lgp.core.planner import HumoroLGP
+from lgp.geometry.geometry import get_angle
 
 # temporary importing until complication of install is resolve
 import os
@@ -12,35 +13,6 @@ import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(_path_file, "../../../humoro"))
 from humoro.trajectory import Trajectory
-
-
-def convert_to_humoro_traj(traj):
-    x_idx, y_idx = 2 * np.arange(traj.T() + 2), 2 * np.arange(traj.T() + 2) + 1
-    arr = np.zeros((7, traj.T() + 2))
-    arr[0], arr[1] = traj.x()[x_idx], traj.x()[y_idx]
-    arr[6] = np.ones(traj.T() + 2)
-    return Trajectory(data=arr)
-
-
-def get_angle(v1, v2):
-    return np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-
-
-def get_quaternion_traj(traj):
-    '''
-    get orientation trajectory along 2D trajectory
-    '''
-    q_traj = []
-    x = np.array([1, 0])
-    for i in range(traj.shape[0] - 1):
-        v = traj[i + 1] - traj[i]
-        z_angle = get_angle(v, x)
-        q = p.getQuaternionFromEuler([0, 0, z_angle])
-        q_traj.append(q)
-    q_traj.append(q)  # copy last q to match traj len
-    assert len(q_traj) == traj.shape[0]
-    return np.array(q_traj)
-
 
 class DynamicLGP(object):
     '''
@@ -68,7 +40,7 @@ class HumoroDynamicLGP(DynamicLGP):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
         self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config, **kwargs)
         # parameters
-        self.trigger_period = kwargs.get('trigger_period', 5)  # timesteps
+        self.trigger_period = kwargs.get('trigger_period', 10)  # timesteps
         self.timeout = kwargs.get('timeout', 100)  # seconds
         # useful variables
         self.player = self.humoro_lgp.workspace.hr.p
@@ -131,6 +103,7 @@ class HumoroDynamicLGP(DynamicLGP):
             self.humoro_lgp.visualize()
             self.humoro_lgp.increase_timestep()
             time.sleep(1 / self.humoro_lgp.sim_fps)
+        self.humoro_lgp.update_workspace()
         self.humoro_lgp.update_current_symbolic_state()
         if self.check_goal_reached():
             HumoroDynamicLGP.logger.info('Task complete successfully!')
