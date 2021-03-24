@@ -187,7 +187,8 @@ class HumoroLGP(LGP):
         self.clear_plan()
         self.t = 0  # current environment timestep
         self.lgp_t = 0  # lgp time 
-        self.elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in plan is changed
+        self.symbolic_elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in symbolic plan is changed
+        self.geometric_elapsed_t = 0  # elapsed time since the last unchanged geometric plan, should be reset to 0 invoking geometric replan
         self.prev_first_action = None
 
     def clear_plan(self):
@@ -224,7 +225,8 @@ class HumoroLGP(LGP):
         self.lgp_t += 1
         if self.plan is not None:
             if self.lgp_t % self.ratio == 0:
-                self.elapsed_t += 1
+                self.symbolic_elapsed_t += 1
+                self.geometric_elapsed_t += 1
 
     def verify_plan(self, plan=None):
         '''
@@ -242,13 +244,13 @@ class HumoroLGP(LGP):
                 # print('Action: ', a.name + ' ' + ' '.join(a.parameters))
                 # start precondition
                 start = True
-                if not (i == 0 and self.elapsed_t != 0):  # don't check for start precondition for currently executing first action
+                if not (i == 0 and self.symbolic_elapsed_t != 0):  # don't check for start precondition for currently executing first action
                     p = self.workspace.get_prediction_predicates(self.t + current_t * self.ratio)
                     start = LogicPlanner.applicable(p, a.start_positive_preconditions, a.start_negative_preconditions)
                     # print('Start: ', p, a.start_positive_preconditions, a.start_negative_preconditions, self.t + current_t)
                 # TODO: implement check for over all precondition when needed 
                 # end precondition
-                current_t += a.duration - (self.elapsed_t if i == 0 else 0)
+                current_t += a.duration - (self.symbolic_elapsed_t if i == 0 else 0)
                 if current_t > self.window_len:  # don't verify outside window
                     break
                 p = self.workspace.get_prediction_predicates(self.t + current_t * self.ratio)
@@ -258,7 +260,7 @@ class HumoroLGP(LGP):
                 if not (start and end):
                     return False
             else:
-                current_t += a.duration - (self.elapsed_t if i == 0 else 0)
+                current_t += a.duration - (self.symbolic_elapsed_t if i == 0 else 0)
                 if current_t > self.window_len:  # don't verify outside window
                     break
         return True
@@ -296,26 +298,27 @@ class HumoroLGP(LGP):
         '''
         This function plan geometric trajectory
         '''
+        robot = self.workspace.get_robot_link_obj()
+        robot.paths.clear()
+        self.geometric_elapsed_t = 0
         if self.plan is None:
             HumoroLGP.logger.warn('Symbolic plan is empty. Cannot plan trajectory!')
             return False
         waypoints = [(self.workspace.get_robot_geometric_state(), 0)]
-        t = 0
-        running_t = -self.elapsed_t 
+        t = -self.symbolic_elapsed_t 
         for action in self.plan[1]:
-            if t + action.duration > self.elapsed_t:
+            if t + action.duration > 0:
                 if action.name == 'move':
                     location_frame = action.parameters[0]
                 else:
                     location_frame = action.parameters[1]
-                running_t += action.duration
-                if t < self.elapsed_t and t + action.duration > self.elapsed_t and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
-                    waypoints.append((self.workspace.get_robot_geometric_state(), running_t))
+                if t < self.symbolic_elapsed_t and t + action.duration > self.symbolic_elapsed_t and action.name != 'move':  # this if forces robot to stay at current point while executing pick/place
+                    waypoints.append((self.workspace.get_robot_geometric_state(), t + action.duration))
                 else:
-                    waypoints.append((self.workspace.geometric_state[location_frame], running_t))
+                    waypoints.append((self.workspace.geometric_state[location_frame], t + action.duration))
             t += action.duration
         if len(waypoints) == 1:
-            HumoroLGP.logger.warn(f'Elapsed time: {self.elapsed_t} is larger than total time: {t} of original plan!')
+            HumoroLGP.logger.warn(f'Elapsed time: {self.symbolic_elapsed_t} is larger than total time: {t} of original plan!')
             return False
         # this is a handcrafted code for setting human as an obstacle.
         if ('agent-avoid-human',) in self.logic_planner.current_state:
@@ -329,7 +332,6 @@ class HumoroLGP(LGP):
         reached, traj, grad, delta = self.objective.optimize()
         # check geometric planning successful
         if reached:
-            robot = self.workspace.get_robot_link_obj()
             robot.paths.append(traj)  # add planned path
         else:
             HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
@@ -361,7 +363,7 @@ class HumoroLGP(LGP):
         # mechanism to track elapsed time of unchanged first action
         current_first_action = self.plan[1][0].name + ' ' + ' '.join(self.plan[1][0].parameters)
         if self.prev_first_action != current_first_action:
-            self.elapsed_t = 0
+            self.symbolic_elapsed_t = 0
             self.prev_first_action = current_first_action
         success = self.geometric_plan()
         return success
@@ -372,7 +374,7 @@ class HumoroLGP(LGP):
             return None
         t = 0
         for action in self.plan[1]:
-            if t + action.duration > self.elapsed_t:
+            if t + action.duration > self.symbolic_elapsed_t:
                 return action
             t += action.duration
         return None
@@ -380,7 +382,7 @@ class HumoroLGP(LGP):
     def act(self, action=None, **kwargs):
         if action is None: # execute current action
             action = self.get_current_action()
-            if action is None:  # if elapsed_t is greater than total time of the plan
+            if action is None:  # if symbolic_elapsed_t is greater than total time of the plan
                 return
         return self.action_map[action.name](action, **kwargs)
 
@@ -393,7 +395,7 @@ class HumoroLGP(LGP):
             return
         # currently there is only one path
         robot = self.workspace.get_robot_link_obj()
-        self.workspace.set_robot_geometric_state(robot.paths[0].configuration(self.elapsed_t))
+        self.workspace.set_robot_geometric_state(robot.paths[0].configuration(self.geometric_elapsed_t))
 
     def _pick_action(self, action, sanity_check=True):
         # geometrically sanity check

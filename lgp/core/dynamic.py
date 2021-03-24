@@ -122,7 +122,7 @@ class HumoroDynamicLGP(DynamicLGP):
                 # self.humoro_lgp.workspace.draw_workspace()
                 # self.humoro_lgp.draw_potential_heightmap()
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
-                # executing first action in the plan
+                # executing current action in the plan
                 if success:
                     self.humoro_lgp.act(sanity_check=False)
                 self.humoro_lgp.update_workspace()

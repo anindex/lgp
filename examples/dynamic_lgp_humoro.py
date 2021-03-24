@@ -32,4 +32,4 @@ lgp = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, confi
                        robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR, verbose=args.v)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-lgp.run()
+lgp.run(geometric_replan=True)
