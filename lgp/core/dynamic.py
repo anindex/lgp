@@ -92,7 +92,7 @@ class HumoroDynamicLGP(DynamicLGP):
             if geometric_replan and (self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0):
                 success = self.humoro_lgp.geometric_plan()
                 # self.humoro_lgp.workspace.draw_workspace()
-                # self.humoro_lgp.draw_potential_heightmap()
+                self.humoro_lgp.draw_potential_heightmap()
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
                 # executing current action in the plan
                 if success:

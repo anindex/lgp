@@ -343,12 +343,12 @@ class HumoroLGP(LGP):
             self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
         trajectory = linear_interpolation_waypoints_trajectory(waypoints)
         self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
-        reached, traj, grad, delta = self.objective.optimize()
+        reached, traj = self.objective.optimize()
         # check geometric planning successful
         if reached:
             robot.paths.append(traj)  # add planned path
         else:
-            HumoroLGP.logger.warn('Trajectory optim for robot %s failed! Gradients: %s, delta: %s' % (robot_frame, grad, delta))
+            HumoroLGP.logger.warn('Trajectory optim for robot %s failed!' % robot_frame)
             return False
         return True
 

@@ -10,7 +10,7 @@ import os
 import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(_path_file, "../../../bewego"))
-from pybewego import MotionObjective
+from pybewego import PlanarOptimizer
 
 
 class TrajectoryConstraintObjective:
@@ -19,12 +19,20 @@ class TrajectoryConstraintObjective:
     def __init__(self, **kwargs):
         self.verbose = kwargs.get('verbose', False)
         self.config_space_dim = kwargs.get('config_space_dim', 2)
-        self.T = kwargs.get('T', 20)   # time steps
+        self.T = kwargs.get('T', 0)   # time steps
         self.dt = kwargs.get('dt', 0.1)  # sample rate
         self.trajectory_space_dim = (self.config_space_dim * (self.T + 2))
         # set parameters
         self.set_parameters(**kwargs)
         self.objective = None
+        # ipopt options
+        self.ipopt_options = {
+            'tol': kwargs.get('tol', 1e-3),
+            'acceptable_tol': kwargs.get('tol', 1e-2),
+            'max_cpu_time': kwargs.get('max_cpu_time', 100),
+            'constr_viol_tol': kwargs.get('constr_viol_tol', 1e-2),
+            'max_iter': kwargs.get('max_iter', 100)
+        }
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)
@@ -36,15 +44,18 @@ class TrajectoryConstraintObjective:
             self.config_space_dim = self.trajectory.n()
             self.trajectory_space_dim = (self.config_space_dim * (self.T + 2))
         self.waypoints = kwargs.get('waypoints', None)
-        self.eq_constraints = kwargs.get('eq_constraints', {})
-        self.ineq_constraints = kwargs.get('ineq_constraints', {})
-        self.s_velocity_norm = kwargs.get('s_velocity_norm', 0.005) / self.dt # optimizer implementation specific
-        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 0.01) / self.dt  # optimizer implementation specific
-        self.s_obstacles = kwargs.get('s_obstacles', 5)
-        self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 10)
-        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 1)
-        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+5)
-        self.s_waypoint = kwargs.get('s_waypoint', 1e+5)
+        self.s_velocity_norm = kwargs.get('s_velocity_norm', 1)
+        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 100)
+        self.s_obstacles = kwargs.get('s_obstacles', 1e+3)
+        self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 7)
+        self.s_obstacle_gamma = kwargs.get('s_obstacle_gamma', 100)
+        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0)
+        self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1e-1)
+        self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstale_constraint', True)
+        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1)
+        self.with_goal_constraint = kwargs.get('with_goal_constraint', True)
+        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1)
+        self.with_waypoint_constraint = kwargs.get('with_waypoint_constraint', True)
 
     def set_problem(self, **kwargs):
         self.set_parameters(**kwargs)
@@ -54,7 +65,7 @@ class TrajectoryConstraintObjective:
         if self.trajectory is None:
             TrajectoryConstraintObjective.logger.error('Init trajectory is not defined! Cannot set optimization problem.')
             return
-        self.problem = MotionObjective(self.T, self.dt, self.config_space_dim)
+        self.problem = PlanarOptimizer(self.T, self.dt, self.workspace.box.box_extent())
         # Add workspace obstacles
         for o in self.workspace.obstacles.values():
             if isinstance(o, Circle):
@@ -63,7 +74,7 @@ class TrajectoryConstraintObjective:
                 self.problem.add_box(o.origin, o.dim)
             else:
                 TrajectoryConstraintObjective.logger.warn('Shape {} not supported by bewego'.format(type(o)))
-        # Terms
+        # terms
         if self.s_velocity_norm > 0:
             self.problem.add_smoothness_terms(1, self.s_velocity_norm)
         if self.s_acceleration_norm > 0:
@@ -74,13 +85,28 @@ class TrajectoryConstraintObjective:
                 self.s_obstacle_alpha,
                 self.s_obstacle_margin)
         if self.s_terminal_potential > 0:
-            self.problem.add_terminal_potential_terms(self.q_goal, self.s_terminal_potential)
-        if self.waypoints is not None:
+            if self.with_goal_constraint:
+                self.problem.add_goal_constraint(self.q_goal, self.s_terminal_potential)
+            else:
+                self.problem.add_terminal_potential_terms(self.q_goal, self.s_terminal_potential)
+        if self.waypoints is not None and self.s_waypoint_constraint > 0:
             for i in range(1, len(self.waypoints) - 1):
-                self.problem.add_waypoint_terms(*self.waypoints[i], self.s_waypoint)
+                if self.with_waypoint_constraint:
+                    self.problem.add_waypoint_constraint(*self.waypoints[i], self.s_waypoint_constraint)
+                else:
+                    self.problem.add_waypoint_terms(*self.waypoints[i], self.s_waypoint_constraint)
+        if self.s_obstacle_constraint > 0:
+            if self.with_smooth_obstacle_constraint:
+                self.problem.add_smooth_keypoints_surface_constraints(self.s_obstacle_margin, self.s_obstacle_gamma, self.s_obstacle_constraint)
+            else:
+                self.problem.add_keypoints_surface_constraints(self.s_obstacle_margin, self.s_obstacle_constraint)
         self.objective = self.problem.objective(self.q_init)
+        # self.problem.set_trajectory_publisher(False, 100000)
     
     def cost(self, trajectory=None):
+        '''
+        Should call set problem first
+        '''
         if self.objective is not None:
             if trajectory is None:
                 trajectory = self.trajectory
@@ -88,42 +114,19 @@ class TrajectoryConstraintObjective:
         else:
             return 0.
 
-    def optimize(self, nb_steps=100, optimizer='newton'):
-        xi = self.trajectory.active_segment()
-        if optimizer == 'newton':
-            res = optimize.minimize(
-                x0=np.array(xi),
-                method='Newton-CG',
-                fun=self.objective.forward,
-                jac=self.objective.gradient,
-                hess=self.objective.hessian,
-                options={'maxiter': nb_steps, 'disp': self.verbose}
-            )
-            self.trajectory.active_segment()[:] = res.x
-            gradient = res.jac
-            delta = res.jac
-            dist = np.linalg.norm(
-                self.trajectory.final_configuration() - self.q_goal)
-            if self.verbose:
-                TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
-        elif optimizer == 'ipopt':
-            res = minimize_ipopt(
-                x0=np.array(xi),
-                fun=self.objective.forward,
-                jac=self.objective.gradient,
-                hess=self.objective.hessian,
-                options={'maxiter': nb_steps, 'disp': self.verbose}
-            )
-            self.trajectory.active_segment()[:] = res.x
-            gradient = res.jac
-            delta = res.jac
-            dist = np.linalg.norm(
-                self.trajectory.final_configuration() - self.q_goal)
-            if self.verbose:
-                TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
-        else:
-            TrajectoryConstraintObjective.logger.error('Optimizer %s is not support!' % optimizer)
-        return dist < 1.e-3, self.trajectory, gradient, delta
+    def optimize(self, ipopt_options=None):
+        if ipopt_options is None:
+            ipopt_options = self.ipopt_options
+        res = self.problem.optimize(
+            self.trajectory.x(),
+            self.q_goal,
+            ipopt_options
+        )
+        self.trajectory.active_segment()[:] = res.x
+        dist = np.linalg.norm(self.trajectory.final_configuration() - self.q_goal)
+        if self.verbose:
+            TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
+        return dist < 1.e-3, self.trajectory
 
     @property
     def q_init(self):
