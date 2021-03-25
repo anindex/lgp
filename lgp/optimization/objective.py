@@ -18,21 +18,24 @@ class TrajectoryConstraintObjective:
 
     def __init__(self, **kwargs):
         self.verbose = kwargs.get('verbose', False)
-        self.config_space_dim = kwargs.get('config_space_dim', 2)
         self.T = kwargs.get('T', 0)   # time steps
         self.dt = kwargs.get('dt', 0.1)  # sample rate
-        self.trajectory_space_dim = (self.config_space_dim * (self.T + 2))
+        self.n = kwargs.get('n', 2)
         # set parameters
         self.set_parameters(**kwargs)
         self.objective = None
         # ipopt options
         self.ipopt_options = {
-            'tol': kwargs.get('tol', 1e-3),
-            'acceptable_tol': kwargs.get('tol', 1e-2),
-            'max_cpu_time': kwargs.get('max_cpu_time', 100),
-            'constr_viol_tol': kwargs.get('constr_viol_tol', 1e-2),
-            'max_iter': kwargs.get('max_iter', 100)
+            'tol': kwargs.get('tol', 1e-2),
+            'acceptable_tol': kwargs.get('tol', 5e-4),
+            'acceptable_constr_viol_tol': kwargs.get('acceptable_constr_viol_tol', 5e-1),
+            'constr_viol_tol': kwargs.get('constr_viol_tol', 5e-2),
+            'max_iter': kwargs.get('max_iter', 150),
+            'bound_relax_factor': kwargs.get('bound_relax_factor', 0),
+            'obj_scaling_factor': kwargs.get('obj_scaling_factor', 1e+2)
         }
+        # viewer
+        self.enable_viewer = kwargs.get('enable_viewer', False)
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)
@@ -41,20 +44,19 @@ class TrajectoryConstraintObjective:
             self._q_init = self.trajectory.initial_configuration()
             self._q_goal = self.trajectory.final_configuration()
             self.T = self.trajectory.T()
-            self.config_space_dim = self.trajectory.n()
-            self.trajectory_space_dim = (self.config_space_dim * (self.T + 2))
+            self.n = self.trajectory.n()
         self.waypoints = kwargs.get('waypoints', None)
-        self.s_velocity_norm = kwargs.get('s_velocity_norm', 1)
-        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 100)
+        self.s_velocity_norm = kwargs.get('s_velocity_norm', 0)
+        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 10)
         self.s_obstacles = kwargs.get('s_obstacles', 1e+3)
         self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 7)
-        self.s_obstacle_gamma = kwargs.get('s_obstacle_gamma', 100)
+        self.s_obstacle_gamma = kwargs.get('s_obstacle_gamma', 60)
         self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0)
-        self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1e-1)
+        self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1)
         self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstale_constraint', True)
-        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1)
+        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+6)
         self.with_goal_constraint = kwargs.get('with_goal_constraint', True)
-        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1)
+        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1e+5)
         self.with_waypoint_constraint = kwargs.get('with_waypoint_constraint', True)
 
     def set_problem(self, **kwargs):
@@ -101,7 +103,9 @@ class TrajectoryConstraintObjective:
             else:
                 self.problem.add_keypoints_surface_constraints(self.s_obstacle_margin, self.s_obstacle_constraint)
         self.objective = self.problem.objective(self.q_init)
-        # self.problem.set_trajectory_publisher(False, 100000)
+        if self.enable_viewer:
+            self.obstacle_potential = self.problem.obstacle_potential()
+            self.problem.set_trajectory_publisher(False, 300000)
     
     def cost(self, trajectory=None):
         '''
@@ -123,10 +127,9 @@ class TrajectoryConstraintObjective:
             ipopt_options
         )
         self.trajectory.active_segment()[:] = res.x
-        dist = np.linalg.norm(self.trajectory.final_configuration() - self.q_goal)
         if self.verbose:
             TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
-        return dist < 1.e-3, self.trajectory
+        return res.success, self.trajectory
 
     @property
     def q_init(self):

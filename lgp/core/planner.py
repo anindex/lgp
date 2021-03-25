@@ -195,6 +195,11 @@ class HumoroLGP(LGP):
     def clear_plan(self):
         self.workspace.get_robot_link_obj().paths.clear()
         self.plan = None
+
+    def get_current_plan_time(self):
+        if self.plan is None:
+            return 0
+        return sum([a.duration for a in self.plan[1]])
     
     def check_verifying_action(self, action):
         for p in action.positive_preconditions.union(action.negative_preconditions):
@@ -338,18 +343,19 @@ class HumoroLGP(LGP):
         if ('agent-avoid-human',) in self.logic_planner.current_state:
             segment = self.workspace.segments[self.segment_id]
             human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
-            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.4)
+            self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=0.3)
         else:
             self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
         trajectory = linear_interpolation_waypoints_trajectory(waypoints)
         self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
-        reached, traj = self.objective.optimize()
-        # check geometric planning successful
-        if reached:
-            robot.paths.append(traj)  # add planned path
-        else:
-            HumoroLGP.logger.warn('Trajectory optim for robot %s failed!' % robot_frame)
-            return False
+        success, traj = self.objective.optimize()
+        # check geometric planning successful TODO: check alternative path in LGP
+        # if success:
+        #     robot.paths.append(self.objective.trajectory)  # add planned path
+        # else:
+        #     HumoroLGP.logger.warn('Geometric trajectory optim failed!')
+        #     return False
+        robot.paths.append(self.objective.trajectory)
         return True
 
     def dynamic_plan(self, single_plan=False):

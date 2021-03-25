@@ -83,16 +83,17 @@ class HumoroDynamicLGP(DynamicLGP):
     def run(self, geometric_replan=False):
         self.humoro_lgp.update_current_symbolic_state()
         success = self.humoro_lgp.symbolic_plan(verify_plan=False)
-        success = self.humoro_lgp.geometric_plan()
+        if not geometric_replan:
+            success = self.humoro_lgp.geometric_plan()
         if not success:
             HumoroDynamicLGP.logger.info('Task failed!')
             return
-        max_t = max(self.humoro_lgp.workspace.duration, self.humoro_lgp.ratio * self.humoro_lgp.objective.T)
+        max_t = max(self.humoro_lgp.workspace.duration, self.humoro_lgp.ratio * self.humoro_lgp.get_current_plan_time())
         while self.humoro_lgp.lgp_t < max_t:
             if geometric_replan and (self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0):
                 success = self.humoro_lgp.geometric_plan()
                 # self.humoro_lgp.workspace.draw_workspace()
-                self.humoro_lgp.draw_potential_heightmap()
+                # self.humoro_lgp.draw_potential_heightmap()
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
                 # executing current action in the plan
                 if success:
