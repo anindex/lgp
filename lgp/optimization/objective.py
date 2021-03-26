@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from scipy import optimize
 
-from pyrieef.geometry.workspace import Circle, Box
+from pyrieef.geometry.workspace import Circle, Box, Workspace
 
 
 # temporary importing until complication of install is resolve
@@ -11,6 +11,7 @@ import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(_path_file, "../../../bewego"))
 from pybewego import PlanarOptimizer
+from pybewego.workspace_viewer_server import WorkspaceViewerServer
 
 
 class TrajectoryConstraintObjective:
@@ -35,7 +36,10 @@ class TrajectoryConstraintObjective:
             'obj_scaling_factor': kwargs.get('obj_scaling_factor', 1e+2)
         }
         # viewer
-        self.enable_viewer = kwargs.get('enable_viewer', False)
+        self.enable_viewer = kwargs.get('enable_viewer', True)
+        self.delay_viewer = kwargs.get('delay_viewer', 500)
+        if self.enable_viewer == True:
+            self.viewer = WorkspaceViewerServer(Workspace(), use_gl=False)
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)
@@ -69,7 +73,7 @@ class TrajectoryConstraintObjective:
             return
         self.problem = PlanarOptimizer(self.T, self.dt, self.workspace.box.box_extent())
         # Add workspace obstacles
-        for o in self.workspace.obstacles.values():
+        for o in self.workspace.obstacles:
             if isinstance(o, Circle):
                 self.problem.add_sphere(o.origin, o.radius)
             elif isinstance(o, Box):
@@ -105,8 +109,9 @@ class TrajectoryConstraintObjective:
         self.objective = self.problem.objective(self.q_init)
         if self.enable_viewer:
             self.obstacle_potential = self.problem.obstacle_potential()
-            self.problem.set_trajectory_publisher(False, 300000)
-    
+            self.problem.set_trajectory_publisher(False, self.delay_viewer)
+            self.viewer.initialize_viewer(self, self.trajectory)
+
     def cost(self, trajectory=None):
         '''
         Should call set problem first
@@ -118,7 +123,7 @@ class TrajectoryConstraintObjective:
         else:
             return 0.
 
-    def optimize(self, ipopt_options=None):
+    def optimize(self, status=None, ipopt_options=None):
         if ipopt_options is None:
             ipopt_options = self.ipopt_options
         res = self.problem.optimize(
@@ -129,6 +134,8 @@ class TrajectoryConstraintObjective:
         self.trajectory.active_segment()[:] = res.x
         if self.verbose:
             TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
+        if status is not None:  # get out status from multiprocessing
+            status.value = res.success
         return res.success, self.trajectory
 
     @property

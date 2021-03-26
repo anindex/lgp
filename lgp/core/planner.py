@@ -1,6 +1,9 @@
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+from multiprocessing import Process
+from multiprocessing.sharedctypes import Value
+from ctypes import c_bool
 from lgp.logic.planner import LogicPlanner
 from lgp.geometry.kinematics import Human, Robot, PointObject
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
@@ -8,7 +11,8 @@ from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.geometry.geometry import get_closest_point_on_circle
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
-from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap
+from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap, Workspace
+from pyrieef.motion.trajectory import Trajectory
 from pyrieef.geometry.pixel_map import sdf
 
 # temporary importing until complication of install is resolve
@@ -347,15 +351,27 @@ class HumoroLGP(LGP):
         else:
             self.workspace.obstacles.pop(self.workspace.HUMAN_FRAME, None)
         trajectory = linear_interpolation_waypoints_trajectory(waypoints)
-        self.objective.set_problem(workspace=self.workspace, trajectory=trajectory, waypoints=waypoints)
-        success, traj = self.objective.optimize()
+        pyrieef_ws = Workspace(box=self.workspace.box)
+        pyrieef_ws.obstacles = list(self.workspace.obstacles.values())
+        self.objective.set_problem(workspace=pyrieef_ws, trajectory=trajectory, waypoints=waypoints)
+        if self.objective.enable_viewer:
+            status = Value(c_bool, True)
+            p = Process(target=self.objective.optimize, args=(status,))
+            p.start()
+            self.objective.viewer.run()
+            p.join()
+            success = status.value
+            print(success)
+            traj = Trajectory(self, q_init=self.objective.viewer.q_init, x=self.objective.viewer.active_x)
+        else:
+            success, traj = self.objective.optimize()
         # check geometric planning successful TODO: check alternative path in LGP
         # if success:
         #     robot.paths.append(self.objective.trajectory)  # add planned path
         # else:
         #     HumoroLGP.logger.warn('Geometric trajectory optim failed!')
         #     return False
-        robot.paths.append(self.objective.trajectory)
+        robot.paths.append(traj)
         return True
 
     def dynamic_plan(self, single_plan=False):
