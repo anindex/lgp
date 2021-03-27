@@ -1,6 +1,5 @@
 matplotlib
 networkx
-scipy
 pyyaml
 pybullet
 qibullet

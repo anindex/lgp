@@ -40,8 +40,8 @@ class HumoroDynamicLGP(DynamicLGP):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
         self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config, **kwargs)
         # parameters
-        self.trigger_period = kwargs.get('trigger_period', 10)  # timesteps
-        self.timeout = kwargs.get('timeout', 100)  # seconds
+        self.trigger_period = self.config['lgp'].get('trigger_period', 10)  # timesteps
+        self.timeout = self.config['lgp'].get('timeout', 100)  # seconds
         # useful variables
         self.player = self.humoro_lgp.workspace.hr.p
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
@@ -80,24 +80,18 @@ class HumoroDynamicLGP(DynamicLGP):
                     handling_pos = current_robot_pos + np.array([0.3, 0.2])
                     p.resetBasePositionAndOrientation(self.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
-    def run(self, geometric_replan=False):
+    def run(self):
         self.humoro_lgp.update_current_symbolic_state()
-        success = self.humoro_lgp.symbolic_plan(verify_plan=False)
-        if not geometric_replan:
-            success = self.humoro_lgp.geometric_plan()
+        success = self.humoro_lgp.symbolic_plan()
+        success = self.humoro_lgp.geometric_plan()
         if not success:
             HumoroDynamicLGP.logger.info('Task failed!')
             return
         max_t = max(self.humoro_lgp.workspace.duration, self.humoro_lgp.ratio * self.humoro_lgp.get_current_plan_time())
         while self.humoro_lgp.lgp_t < max_t:
-            if geometric_replan and (self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0):
-                success = self.humoro_lgp.geometric_plan()
-                # self.humoro_lgp.workspace.draw_workspace()
-                # self.humoro_lgp.draw_potential_heightmap()
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
                 # executing current action in the plan
-                if success:
-                    self.humoro_lgp.act(sanity_check=False)
+                self.humoro_lgp.act(sanity_check=False)
                 self.humoro_lgp.update_workspace()
                 # reflecting changes in PyBullet
                 self.update_visualization()
@@ -112,27 +106,26 @@ class HumoroDynamicLGP(DynamicLGP):
             HumoroDynamicLGP.logger.info('Task failed!')
 
     def dynamic_run(self):
-        '''
-        Main dynamic LGP planning routine
-        '''
-        success = True
-        max_t = self.timeout * self.humoro_lgp.sim_fps
-        while self.humoro_lgp.lgp_t < max_t and not self.check_goal_reached():
-            self.humoro_lgp.update_current_symbolic_state()
+        max_t = self.timeout * self.humoro_lgp.ratio
+        while self.humoro_lgp.lgp_t < max_t:
             if self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0:
-                success = self.humoro_lgp.dynamic_plan()
+                self.humoro_lgp.update_current_symbolic_state()
+                success = self.humoro_lgp.symbolic_plan()
+                success = self.humoro_lgp.geometric_replan()
                 # self.humoro_lgp.workspace.draw_workspace()
                 # self.humoro_lgp.draw_potential_heightmap()
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
-                # executing first action in the plan
+                # executing current action in the plan
                 if success:
-                    self.humoro_lgp.act(self.humoro_lgp.plan[1][0], sanity_check=False)
+                    self.humoro_lgp.act(sanity_check=False)
                 self.humoro_lgp.update_workspace()
                 # reflecting changes in PyBullet
                 self.update_visualization()
             self.humoro_lgp.visualize()
             self.humoro_lgp.increase_timestep()
             time.sleep(1 / self.humoro_lgp.sim_fps)
+        self.humoro_lgp.update_workspace()
+        self.humoro_lgp.update_current_symbolic_state()
         if self.check_goal_reached():
             HumoroDynamicLGP.logger.info('Task complete successfully!')
         else:

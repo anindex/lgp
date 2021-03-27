@@ -23,13 +23,13 @@
   )
   (:durative-action pick
       :parameters (?x - object ?l - location)
-      :duration (= ?duration 5)
+      :duration (= ?duration 1)
       :precondition (and (at end (agent-at ?l)) (at end (on ?x ?l)) (at end (not (human-carry ?x))) (at start (agent-free))) 
       :effect (and (at end (not (on ?x ?l))) (at end (not (agent-free))) (at end (agent-carry ?x)))
   )
   (:durative-action place
       :parameters (?x - object ?l - location)
-      :duration (= ?duration 5)
+      :duration (= ?duration 1)
       :precondition (and (at end (agent-at ?l)) (at start (agent-carry ?x)))  
       :effect (and (at end (not (agent-carry ?x))) (at end (on ?x ?l)) (at end (agent-free)))
   )

@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-from scipy import optimize
 
 from pyrieef.geometry.workspace import Circle, Box, Workspace
 
@@ -27,19 +26,17 @@ class TrajectoryConstraintObjective:
         self.objective = None
         # ipopt options
         self.ipopt_options = {
-            'tol': kwargs.get('tol', 1e-2),
-            'acceptable_tol': kwargs.get('tol', 5e-4),
-            'acceptable_constr_viol_tol': kwargs.get('acceptable_constr_viol_tol', 5e-1),
-            'constr_viol_tol': kwargs.get('constr_viol_tol', 5e-2),
+            # 'tol': kwargs.get('tol', 1e-2),
+            # 'acceptable_tol': kwargs.get('tol', 5e-4),
+            # 'acceptable_constr_viol_tol': kwargs.get('acceptable_constr_viol_tol', 5e-1),
+            # 'constr_viol_tol': kwargs.get('constr_viol_tol', 5e-2),
             'max_iter': kwargs.get('max_iter', 150),
             'bound_relax_factor': kwargs.get('bound_relax_factor', 0),
             'obj_scaling_factor': kwargs.get('obj_scaling_factor', 1e+2)
         }
         # viewer
-        self.enable_viewer = kwargs.get('enable_viewer', True)
-        self.delay_viewer = kwargs.get('delay_viewer', 500)
-        if self.enable_viewer == True:
-            self.viewer = WorkspaceViewerServer(Workspace(), use_gl=False)
+        self.enable_viewer = kwargs.get('enable_viewer', False)
+        self.delay_viewer = kwargs.get('delay_viewer', 200)
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)
@@ -50,6 +47,8 @@ class TrajectoryConstraintObjective:
             self.T = self.trajectory.T()
             self.n = self.trajectory.n()
         self.waypoints = kwargs.get('waypoints', None)
+        self.waypoint_manifolds = kwargs.get('waypoint_manifolds', None)
+        self.goal_manifold = kwargs.get('goal_manifold', None)
         self.s_velocity_norm = kwargs.get('s_velocity_norm', 0)
         self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 10)
         self.s_obstacles = kwargs.get('s_obstacles', 1e+3)
@@ -58,9 +57,10 @@ class TrajectoryConstraintObjective:
         self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0)
         self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1)
         self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstale_constraint', True)
-        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+6)
+        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+4)
         self.with_goal_constraint = kwargs.get('with_goal_constraint', True)
-        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1e+5)
+        self.with_goal_manifold = kwargs.get('with_goal_manifold', True)
+        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1e+4)
         self.with_waypoint_constraint = kwargs.get('with_waypoint_constraint', True)
 
     def set_problem(self, **kwargs):
@@ -92,15 +92,22 @@ class TrajectoryConstraintObjective:
                 self.s_obstacle_margin)
         if self.s_terminal_potential > 0:
             if self.with_goal_constraint:
-                self.problem.add_goal_constraint(self.q_goal, self.s_terminal_potential)
+                if self.with_goal_manifold:
+                    self.problem.add_goal_manifold_constraint(self.goal_manifold.origin, self.goal_manifold.radius, self.s_terminal_potential)
+                else:
+                    self.problem.add_goal_constraint(self.q_goal, self.s_terminal_potential)
             else:
                 self.problem.add_terminal_potential_terms(self.q_goal, self.s_terminal_potential)
-        if self.waypoints is not None and self.s_waypoint_constraint > 0:
-            for i in range(1, len(self.waypoints) - 1):
-                if self.with_waypoint_constraint:
-                    self.problem.add_waypoint_constraint(*self.waypoints[i], self.s_waypoint_constraint)
-                else:
-                    self.problem.add_waypoint_terms(*self.waypoints[i], self.s_waypoint_constraint)
+        if self.s_waypoint_constraint > 0:
+            if self.waypoints is not None:  # waypoints take precedent
+                for i in range(1, len(self.waypoints) - 1):
+                    if self.with_waypoint_constraint:
+                        self.problem.add_waypoint_constraint(*self.waypoints[i], self.s_waypoint_constraint)
+                    else:
+                        self.problem.add_waypoint_terms(*self.waypoints[i], self.s_waypoint_constraint)
+            elif self.waypoint_manifolds is not None:
+                for i in range(len(self.waypoint_manifolds) - 1):
+                    self.problem.add_waypoint_manifold_constraint(self.waypoint_manifolds[i][0].origin, self.waypoint_manifolds[i][1], self.waypoint_manifolds[i][0].radius, self.s_waypoint_constraint)
         if self.s_obstacle_constraint > 0:
             if self.with_smooth_obstacle_constraint:
                 self.problem.add_smooth_keypoints_surface_constraints(self.s_obstacle_margin, self.s_obstacle_gamma, self.s_obstacle_constraint)
@@ -110,7 +117,6 @@ class TrajectoryConstraintObjective:
         if self.enable_viewer:
             self.obstacle_potential = self.problem.obstacle_potential()
             self.problem.set_trajectory_publisher(False, self.delay_viewer)
-            self.viewer.initialize_viewer(self, self.trajectory)
 
     def cost(self, trajectory=None):
         '''
@@ -119,7 +125,7 @@ class TrajectoryConstraintObjective:
         if self.objective is not None:
             if trajectory is None:
                 trajectory = self.trajectory
-            return self.objective.forward(trajectory.active_segment())
+            return self.objective.forward(trajectory.active_segment())[0]
         else:
             return 0.
 

@@ -29,7 +29,7 @@ robot_model_file = join(MODEL_DIR, 'pepper.urdf')
 
 start_time = time.time()
 lgp = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, config_file=config_file, 
-                       robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR, verbose=args.v)
+                       robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR, enable_viewer=True, verbose=args.v)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-lgp.run(geometric_replan=True)
+lgp.run()

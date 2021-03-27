@@ -5,14 +5,14 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
 from pyrieef.geometry.pixel_map import PixelMap
-from pyrieef.geometry.workspace import Circle
+from pyrieef.geometry.workspace import Circle, Workspace
 
 from lgp.geometry.kinematics import OBJECT_MAP, EnvBox
 from lgp.geometry.transform import LinearTranslation
 from lgp.utils.helpers import DRAW_MAP, frozenset_of_tuples, draw_trajectory
 
 
-class Workspace:
+class LGPWorkspace:
     """
        Contains obstacles.
     """
@@ -58,8 +58,13 @@ class Workspace:
         resolution = extent.x() / nb_points
         return PixelMap(resolution, extent)
 
+    def get_pyrieef_ws(self):
+        pyrieef_ws = Workspace(box=self.box)
+        pyrieef_ws.obstacles = list(self.obstacles.values())
+        return pyrieef_ws
 
-class YamlWorkspace(Workspace):
+
+class YamlWorkspace(LGPWorkspace):
     '''
     NOTE: Ideally, we should adopt URDF format to define the workspace. Currently, we use self-defined yaml config for this.
     For now this only supports one agent (robot).
@@ -70,7 +75,6 @@ class YamlWorkspace(Workspace):
     GLOBAL_FRAME = 'world'
 
     def __init__(self, config, init_symbol=None, init=True, **kwargs):
-        self.name = config['name']
         self.robots = {}
         self.humans = {}
         self.kin_tree = self.build_kinematic_tree(config)
