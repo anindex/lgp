@@ -10,7 +10,8 @@ lgp:
   window_len: 'max'
   sim_fps: 120
   fps: 10
-  human_freq: 'once'
+  human_freq: 'human-at'
+  traj_init: 'outer'  # nearest | outer
   trigger_period: 10
   timeout: 100
   enable_viewer: True

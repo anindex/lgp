@@ -312,7 +312,7 @@ class HumoroWorkspace(YamlWorkspace):
             fraction = 1.0
         else:
             fraction = self.hr.get_fraction_duration(segment, human_carry)
-        self.duration = self.hr.get_segment_timesteps(segment) * fraction
+        self.duration = int(self.hr.get_segment_timesteps(segment) * fraction)
         global_frame = self.GLOBAL_FRAME
         self.hr.load_for_playback(segment)
         self.hr.visualize_frame(segment, 0)

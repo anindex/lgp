@@ -9,7 +9,7 @@ from lgp.logic.planner import LogicPlanner
 from lgp.geometry.kinematics import Human, Robot, PointObject
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
-from lgp.geometry.geometry import get_closest_point_on_circle
+from lgp.geometry.geometry import get_closest_point_on_circle, get_point_on_circle
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
 from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap, Workspace
@@ -170,6 +170,7 @@ class HumoroLGP(LGP):
         self.sim_fps = lgp_config['sim_fps']  # simulation fps
         self.fps = lgp_config['fps']  # sampling fps
         self.human_freq = lgp_config.get('human_freq', 40)  # human placement frequency according to fps
+        self.traj_init = lgp_config.get('traj_init', 'outer')  # initialization scheme for trajectory
         self.window_len = lgp_config.get('window_len', 'max')  # frames, according to this sampling fps
         self.enable_viewer = lgp_config.get('enable_viewer', False)
         self.ratio = int(self.sim_fps / self.fps)
@@ -183,6 +184,13 @@ class HumoroLGP(LGP):
         init_symbols = self.symbol_sanity_check()
         constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
         self.workspace.set_constant_symbol(constant_symbols)
+        self.human_radius = 0.25
+        self._precompute_human_placement()
+        self.landmarks = {
+            'table': get_point_on_circle(np.pi/2, self.workspace.kin_tree.nodes['table']['limit']),
+            'big_shelf': get_point_on_circle(np.pi, self.workspace.kin_tree.nodes['big_shelf']['limit']),
+            'small_shelf': get_point_on_circle(0, self.workspace.kin_tree.nodes['small_shelf']['limit'])
+        }
         # dynamic parameters
         self.reset()
         # action map
@@ -316,7 +324,10 @@ class HumoroLGP(LGP):
                 if action.name == 'move':
                     location_frame = action.parameters[0]
                     limit_circle = self.workspace.kin_tree.nodes[location_frame]['limit']
-                    p = get_closest_point_on_circle(prev_pivot, limit_circle)
+                    if self.traj_init == 'nearest':
+                        p = get_closest_point_on_circle(prev_pivot, limit_circle)
+                    elif self.traj_init == 'outer':
+                        p = self.landmarks[location_frame]
                     waypoints.append((p, t + action.duration))
                     waypoint_manifolds.append((limit_circle, t + action.duration))
                     prev_pivot = self.workspace.geometric_state[location_frame]
@@ -326,7 +337,7 @@ class HumoroLGP(LGP):
             return None, None
         return waypoints, waypoint_manifolds
 
-    def place_human(self, human_radius=0.25):
+    def place_human(self):
         '''
         Populate human as obstacles
         '''
@@ -338,7 +349,11 @@ class HumoroLGP(LGP):
             if self.human_freq == 'once':
                 segment = self.workspace.segments[self.segment_id]
                 human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
-                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=human_radius)
+                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=self.human_radius)
+            elif self.human_freq == 'human-at':
+                for t in self.human_placements:
+                    if t >= self.t:
+                        self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(t)] = self.human_placements[t]
             else:
                 for t in range(self.window_len):
                     if t % self.human_freq == 0:
@@ -347,7 +362,7 @@ class HumoroLGP(LGP):
                             break
                     segment = self.workspace.segments[self.segment_id]
                     human_pos = self.workspace.hr.get_human_pos_2d(segment, sim_t)
-                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=human_radius)
+                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=self.human_radius)
 
     def symbolic_plan(self, update_goal=True, alternative=True, verify_plan=False):
         '''
@@ -580,6 +595,22 @@ class HumoroLGP(LGP):
             if a.name == 'move':
                 return a, t
         return None, t
+
+    def _precompute_human_placement(self):
+        self.human_placements = {}
+        prev_at, at = False, False
+        for t in range(self.workspace.duration):
+            s = self.workspace.get_prediction_predicates(t)
+            at = False
+            for p in s:
+                if p[0] == 'human-at':
+                    at = True
+                    break
+            if at and not prev_at:
+                segment = self.workspace.segments[self.segment_id]
+                human_pos = self.workspace.hr.get_human_pos_2d(segment, t)
+                self.human_placements[t] = Human(origin=human_pos, radius=self.human_radius)
+            prev_at = at
 
     def visualize(self):
         self.workspace.visualize_frame(self.t)

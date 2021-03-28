@@ -8,6 +8,12 @@ def get_angle(v1, v2):
     return np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
 
+def get_point_on_circle(angle, circle):
+    x = circle.origin[0] + (circle.radius * np.cos(angle))
+    y = circle.origin[1] + (circle.radius * np.sin(angle))
+    return np.array([x, y])
+
+
 def get_closest_point_on_circle(p, circle):
     '''
     Finding the closest x,y coordinates on circle, based on given point
@@ -16,9 +22,7 @@ def get_closest_point_on_circle(p, circle):
     v = p - circle.origin
     angle = get_angle(v, x_vec) 
     angle = angle if v[1] > 0 else -angle
-    x = circle.origin[0] + (circle.radius * np.cos(angle))
-    y = circle.origin[1] + (circle.radius * np.sin(angle))
-    return np.array([x, y])
+    return get_point_on_circle(angle, circle)
 
 
 if __name__ == '__main__':
