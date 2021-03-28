@@ -7,7 +7,6 @@ import os
 import sys
 import pickle
 
-from lgp.logic.astar import astar
 _path_file = os.path.dirname(os.path.realpath(__file__))
 
 

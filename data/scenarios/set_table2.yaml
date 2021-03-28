@@ -3,14 +3,22 @@
 #   - 'world' is always the root of the workspace
 #   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
 #   - color is as format rgba
-workspace:
+lgp:
   name: 'set_table2'
   task_id: 0
   segment_id: 1
-  window_len: 40
+  window_len: 'max'
   sim_fps: 120
   fps: 10
-  objects: ['plate_blue', 'cup_green']
+  human_freq: 'human-at'
+  traj_init: 'outer'  # nearest | outer
+  trigger_period: 10
+  timeout: 200
+  enable_viewer: True
+
+workspace:
+  objects: ['cup_green', 'plate_blue']
+  human_carry: 1
   tree:
     world:
       origin: [0., 0.]

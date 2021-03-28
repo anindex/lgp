@@ -209,7 +209,6 @@ class HumoroLGP(LGP):
         self.lgp_t = 0  # lgp time 
         self.symbolic_elapsed_t = 0  # elapsed time since the last unchanged first action, should be reset to 0 when first action in symbolic plan is changed
         self.geometric_elapsed_t = 0  # elapsed time since the last unchanged geometric plan, should be reset to 0 invoking geometric replan
-        self.prev_current_action = None
 
     def clear_plan(self):
         self.workspace.get_robot_link_obj().paths.clear()
@@ -241,6 +240,7 @@ class HumoroLGP(LGP):
     def update_current_symbolic_state(self):
         self.workspace.update_symbolic_state()
         self.logic_planner.current_state = self.workspace.symbolic_state
+        self.update_goal()  # update goal according to human predictions
 
     def update_workspace(self):
         self.workspace.update_workspace(self.t)
@@ -297,18 +297,36 @@ class HumoroLGP(LGP):
                 if plan_t > self.window_len:  # don't verify outside window
                     break
         return True
+    
+    def check_plan(self, plan=None):
+        '''
+        Check if the plan can lead to goal from current state
+        '''
+        if plan is None:
+            plan = self.plan
+            if plan is None:
+                return False
+        state = self.logic_planner.current_state
+        for a in plan[1]:
+            if not LogicPlanner.applicable(state, a.positive_preconditions, a.negative_preconditions):
+                return False
+            state = LogicPlanner.apply(state, a.add_effects, a.del_effects)
+        if state in self.logic_planner.goal_states:
+            return True
+        return False
 
     def update_goal(self):
         for t in range(self.window_len):
             symbols = self.workspace.get_prediction_predicates(self.t + t * self.ratio)
             obj = self._get_human_carry_obj(symbols)
-            if obj is not None:
-                p = self._get_predicate_on_obj(self.logic_planner.problem.positive_goals[0], obj)  # for now there is only + goals                    
-                if p is not None and p not in self.logic_planner.current_state:
-                    neg_p = self._get_predicate_on_obj(self.logic_planner.current_state, obj)
-                    if neg_p is not None:
-                        self.logic_planner.current_state = self.logic_planner.current_state.difference(frozenset([neg_p]))
-                    self.logic_planner.current_state = self.logic_planner.current_state.union(frozenset([p]))
+            if obj is not None and obj in self.workspace.objects:
+                goal_p = self._get_predicate_obj(self.logic_planner.problem.positive_goals[0], obj, 'on')  # for now there is only + goals
+                state_p = self._get_predicate_obj(self.logic_planner.current_state, obj)                
+                if goal_p is not None and state_p is not None and state_p != goal_p:
+                    if state_p[0] == 'on':
+                        self.logic_planner.current_state = self.logic_planner.current_state.difference(frozenset([state_p]))
+                    if state_p[0] != 'agent-carry':
+                        self.logic_planner.current_state = self.logic_planner.current_state.union(frozenset([goal_p]))
 
     def get_waypoints(self, plan=None):
         if plan is None:
@@ -364,14 +382,11 @@ class HumoroLGP(LGP):
                     human_pos = self.workspace.hr.get_human_pos_2d(segment, sim_t)
                     self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=self.human_radius)
 
-    def symbolic_plan(self, update_goal=True, alternative=True, verify_plan=False):
+    def symbolic_plan(self, alternative=True, verify_plan=False):
         '''
         This function plan the feasible symbolic trajectory
-        update_goal according to human prediction
         '''
         self.clear_plan()
-        if update_goal:  # update goal according to human predictions
-            self.update_goal()
         paths, act_seqs = self.logic_planner.plan(alternative=alternative)
         for path, acts in zip(paths, act_seqs):
             plan = (path, acts)
@@ -433,10 +448,10 @@ class HumoroLGP(LGP):
         '''
         This function plan partial trajectory upto next symbolic change
         '''
-        if not self.plans:
+        if not self.plans and self.plan is None:
             HumoroLGP.logger.warn('Symbolic plan is empty. Cannot plan geometric trajectory!')
             return False
-        if self._check_non_move():
+        if not self._check_move():
             return True
         # clear previous paths
         robot = self.workspace.get_robot_link_obj()
@@ -446,9 +461,13 @@ class HumoroLGP(LGP):
         # prepare workspace
         self.place_human()
         workspace = self.workspace.get_pyrieef_ws()
-        ranking = []
-        for plan in self.plans:
-            a, t = self._get_next_move(plan)
+        if self.plan is not None:  # current symbolic plan is still feasible, continue with this plan
+            if not self.check_plan():
+                self.plan = None  # remove current symbolic plan
+                self.symbolic_elapsed_t = 0  # reset symbolic elapsed time
+                HumoroLGP.logger.warn(f'Current symbolic plan becomes symbolically infeasible at time {self.lgp_t}. Trying replanning at next trigger.')
+                return False
+            a, t = self._get_next_move(self.plan)
             location = a.parameters[0]
             current = self.workspace.get_robot_geometric_state()
             goal_manifold = self.workspace.kin_tree.nodes[location_frame]['limit']
@@ -456,38 +475,62 @@ class HumoroLGP(LGP):
             trajectory = linear_interpolation_trajectory(current, goal, t)
             objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
             objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
-            self.objectives.append(objective)
-            ranking.append((objective.cost(), i))
-        # rank the plans
-        ranking.sort(key=operator.itemgetter(0))
-        # optimize the objective according to ranking
-        for r in ranking:
             if self.enable_viewer:
-                self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
+                self.viewer.initialize_viewer(objective, objective.trajectory)
                 status = Value(c_bool, True)
-                p = Process(target=self.objectives[r[1]].optimize, args=(status,))
+                p = Process(target=objective.optimize, args=(status,))
                 p.start()
                 self.viewer.run()
                 p.join()
                 success = status.value
                 traj = Trajectory(self, q_init=self.viewer.q_init, x=self.viewer.active_x)
             else:
-                success, traj = self.objectives[r[1]].optimize()
-            if success:  # choose this plan
-                self.plan = self.plans[r[1]]
-                if self.verbose:
-                    for a in self.plan[1]:
-                        HumoroLGP.logger.info(a.name + ' ' + ' '.join(a.parameters))
-                # mechanism to track elapsed time of unchanged first action
-                current_action = self.plan[1][0]
-                current_action = current_action.name + ' ' + ' '.join(current_action.parameters)
-                if self.prev_current_action != current_action:
-                    self.symbolic_elapsed_t = 0
-                    self.prev_current_action = current_action
+                success, traj = objective.optimize()
+            if success:
                 robot.paths.append(traj)
                 return True
-        HumoroLGP.logger.warn(f'All replan geometrical optimization infeasible at current time {self.lgp_t}. Trying replanning at next trigger.')
-        return False
+            else:
+                self.plan = None  # remove current symbolic plan
+                self.symbolic_elapsed_t = 0  # reset symbolic elapsed time
+                HumoroLGP.logger.warn(f'Current symbolic plan becomes geometrically infeasible at time {self.lgp_t}. Trying replanning at next trigger.')
+                return False
+        else:
+            ranking = []
+            for plan in self.plans:
+                a, t = self._get_next_move(plan)
+                location = a.parameters[0]
+                current = self.workspace.get_robot_geometric_state()
+                goal_manifold = self.workspace.kin_tree.nodes[location_frame]['limit']
+                goal = get_closest_point_on_circle(current, goal_manifold)
+                trajectory = linear_interpolation_trajectory(current, goal, t)
+                objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
+                objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
+                self.objectives.append(objective)
+                ranking.append((objective.cost(), i))
+            # rank the plans
+            ranking.sort(key=operator.itemgetter(0))
+            # optimize the objective according to ranking
+            for r in ranking:
+                if self.enable_viewer:
+                    self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
+                    status = Value(c_bool, True)
+                    p = Process(target=self.objectives[r[1]].optimize, args=(status,))
+                    p.start()
+                    self.viewer.run()
+                    p.join()
+                    success = status.value
+                    traj = Trajectory(self, q_init=self.viewer.q_init, x=self.viewer.active_x)
+                else:
+                    success, traj = self.objectives[r[1]].optimize()
+                if success:  # choose this plan
+                    self.plan = self.plans[r[1]]
+                    if self.verbose:
+                        for a in self.plan[1]:
+                            HumoroLGP.logger.info(a.name + ' ' + ' '.join(a.parameters))
+                    robot.paths.append(traj)
+                    return True
+            HumoroLGP.logger.warn(f'All replan geometrical optimization infeasible at current time {self.lgp_t}. Trying replanning at next trigger.')
+            return False
 
     def get_current_action(self):
         if self.plan is None:
@@ -568,32 +611,44 @@ class HumoroLGP(LGP):
                 return p[1]
         return None
     
-    def _get_predicate_on_obj(self, s, obj):
+    def _get_predicate_obj(self, s, obj, pred=None):
         '''
         Assuming object on only one place
         '''
         for p in s:
-            if p[0] == 'on' and p[1] == obj:
-                return p
+            if len(p) > 1 and p[1] == obj:
+                if pred is None:
+                    return p
+                else:
+                    if p[0] == pred:
+                        return p
         return None
 
-    def _check_non_move(self):
-        if not self.plans:
-            return True
-        for plan in self.plans:
-            for a in plan[1]:
-                if a.name == 'move':
-                    return False
-        return True
+    def _check_move(self):
+        if self.plan is not None:
+            t = 0
+            for a in self.plan[1]:
+                if t >= self.symbolic_elapsed_t:
+                    if a.name == 'move':
+                        return True
+                t += a.duration
+            return False
+        elif self.plans:
+            for plan in self.plans:
+                for a in plan[1]:
+                    if a.name == 'move':
+                        return True
+        return False
     
     def _get_next_move(self, plan):
         if not plan:
             return None, 0
-        t = 0
+        t = -self.symbolic_elapsed_t
         for a in plan[1]:
             t += a.duration
-            if a.name == 'move':
-                return a, t
+            if t > 0:
+                if a.name == 'move':
+                    return a, t
         return None, t
 
     def _precompute_human_placement(self):

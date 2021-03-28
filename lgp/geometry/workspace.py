@@ -308,7 +308,7 @@ class HumoroWorkspace(YamlWorkspace):
         self.segment_id = segment_id
         self.segments = self.hr.get_data_segments(taskid=task_id)
         segment = self.segments[self.segment_id]
-        if prediction:
+        if prediction or human_carry == 'all':
             fraction = 1.0
         else:
             fraction = self.hr.get_fraction_duration(segment, human_carry)
