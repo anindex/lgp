@@ -6,15 +6,15 @@
 lgp:
   name: 'set_table3'
   task_id: 2
-  segment_id: 17
+  segment_id: 2
   window_len: 'max'
   sim_fps: 120
   fps: 10
-  human_freq: 'human-at'
+  human_freq: 'once'
   traj_init: 'outer'  # nearest | outer
   trigger_period: 10
   timeout: 500
-  enable_viewer: True
+  enable_viewer: False
 
 workspace:
   objects: ['cup_red', 'cup_green', 'cup_blue', 'plate_red', 'plate_blue', 'plate_green', 'bowl']

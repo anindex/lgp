@@ -17,7 +17,7 @@
 
   (:durative-action move
       :parameters (?l - location)
-      :duration (= ?duration 40)
+      :duration (= ?duration 30)
       :precondition ()
       :effect (and (at end (not (agent-at ?*))) (at end (agent-at ?l)))
   )

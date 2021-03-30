@@ -320,12 +320,12 @@ class HumoroLGP(LGP):
             symbols = self.workspace.get_prediction_predicates(self.t + t * self.ratio)
             obj = self._get_human_carry_obj(symbols)
             if obj is not None and obj in self.workspace.objects:
-                goal_p = self._get_predicate_obj(self.logic_planner.problem.positive_goals[0], obj, 'on')  # for now there is only + goals
-                state_p = self._get_predicate_obj(self.logic_planner.current_state, obj)                
-                if goal_p is not None and state_p is not None and state_p != goal_p:
-                    if state_p[0] == 'on':
+                goal_p = self._get_predicate_obj(self.logic_planner.problem.positive_goals[0], obj, 'on')  # for now there is only + goals                
+                if goal_p is not None and goal_p not in self.logic_planner.current_state:
+                    state_p = self._get_predicate_obj(self.logic_planner.current_state, obj)
+                    if state_p is not None and state_p[0] == 'on':
                         self.logic_planner.current_state = self.logic_planner.current_state.difference(frozenset([state_p]))
-                    if state_p[0] != 'agent-carry':
+                    if state_p is None or state_p[0] != 'agent-carry':
                         self.logic_planner.current_state = self.logic_planner.current_state.union(frozenset([goal_p]))
 
     def get_waypoints(self, plan=None):
@@ -346,6 +346,9 @@ class HumoroLGP(LGP):
                         p = get_closest_point_on_circle(prev_pivot, limit_circle)
                     elif self.traj_init == 'outer':
                         p = self.landmarks[location_frame]
+                    else:
+                        HumoroLGP.logger.error(f'Traj init scheme {self.traj_init} not support!')
+                        raise ValueError()
                     waypoints.append((p, t + action.duration))
                     waypoint_manifolds.append((limit_circle, t + action.duration))
                     prev_pivot = self.workspace.geometric_state[location_frame]
@@ -430,7 +433,7 @@ class HumoroLGP(LGP):
                 self.viewer.run()
                 p.join()
                 success = status.value
-                traj = Trajectory(self, q_init=self.viewer.q_init, x=self.viewer.active_x)
+                traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
             else:
                 success, traj = self.objectives[r[1]].optimize()
             if success:  # choose this plan
@@ -470,8 +473,14 @@ class HumoroLGP(LGP):
             a, t = self._get_next_move(self.plan)
             location = a.parameters[0]
             current = self.workspace.get_robot_geometric_state()
-            goal_manifold = self.workspace.kin_tree.nodes[location_frame]['limit']
-            goal = get_closest_point_on_circle(current, goal_manifold)
+            goal_manifold = self.workspace.kin_tree.nodes[location]['limit']
+            if self.traj_init == 'nearest':
+                goal = get_closest_point_on_circle(current, goal_manifold)
+            elif self.traj_init == 'outer':
+                goal = self.landmarks[location]
+            else:
+                HumoroLGP.logger.error(f'Traj init scheme {self.traj_init} not support!')
+                raise ValueError()
             trajectory = linear_interpolation_trajectory(current, goal, t)
             objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
             objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
@@ -483,7 +492,7 @@ class HumoroLGP(LGP):
                 self.viewer.run()
                 p.join()
                 success = status.value
-                traj = Trajectory(self, q_init=self.viewer.q_init, x=self.viewer.active_x)
+                traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
             else:
                 success, traj = objective.optimize()
             if success:
@@ -496,12 +505,18 @@ class HumoroLGP(LGP):
                 return False
         else:
             ranking = []
-            for plan in self.plans:
+            for i, plan in enumerate(self.plans):
                 a, t = self._get_next_move(plan)
                 location = a.parameters[0]
                 current = self.workspace.get_robot_geometric_state()
-                goal_manifold = self.workspace.kin_tree.nodes[location_frame]['limit']
-                goal = get_closest_point_on_circle(current, goal_manifold)
+                goal_manifold = self.workspace.kin_tree.nodes[location]['limit']
+                if self.traj_init == 'nearest':
+                    goal = get_closest_point_on_circle(current, goal_manifold)
+                elif self.traj_init == 'outer':
+                    goal = self.landmarks[location]
+                else:
+                    HumoroLGP.logger.error(f'Traj init scheme {self.traj_init} not support!')
+                    raise ValueError()
                 trajectory = linear_interpolation_trajectory(current, goal, t)
                 objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
                 objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
@@ -519,7 +534,7 @@ class HumoroLGP(LGP):
                     self.viewer.run()
                     p.join()
                     success = status.value
-                    traj = Trajectory(self, q_init=self.viewer.q_init, x=self.viewer.active_x)
+                    traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
                 else:
                     success, traj = self.objectives[r[1]].optimize()
                 if success:  # choose this plan
@@ -559,7 +574,11 @@ class HumoroLGP(LGP):
             return
         # currently there is only one path
         robot = self.workspace.get_robot_link_obj()
-        self.workspace.set_robot_geometric_state(robot.paths[0].configuration(self.geometric_elapsed_t))
+        if self.geometric_elapsed_t > robot.paths[0].T():
+            t = robot.paths[0].T()
+        else:
+            t = self.geometric_elapsed_t
+        self.workspace.set_robot_geometric_state(robot.paths[0].configuration(t))
 
     def _pick_action(self, action, sanity_check=True):
         # geometrically sanity check
