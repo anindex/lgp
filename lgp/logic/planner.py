@@ -48,7 +48,8 @@ class LogicPlanner(object):
         if not self.ignore_cache and self.check_cache():
             self.load_cache()
             return
-        self.graph.clear()
+        self.graph = nx.DiGraph()
+        self.goal_states = set()
         # BFS Search to build paths
         fringe = deque()
         fringe.append(self.problem.state)

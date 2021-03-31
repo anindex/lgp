@@ -8,8 +8,8 @@ segment: ['p2_1', 56805, 62201]
 window_len: 'max'
 sim_fps: 120
 fps: 10
-human_freq: 'human-at'  # human-at | once | 40 (int)
-traj_init: 'outer'  # nearest | outer
+human_freq: 'once'  # human-at | once | 40 (int)
+traj_init: 'nearest'  # nearest | outer
 trigger_period: 10
 timeout: 500
 ignore_cache: False

@@ -85,7 +85,7 @@ class HumoroDynamicLGP(DynamicLGP):
                     handling_pos = get_point_on_circle(self.z_angle, self.handling_circle)
                     p.resetBasePositionAndOrientation(self.humoro_lgp.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
-    def run(self, replan=False):
+    def run(self, replan=False, sleep=False):
         self.humoro_lgp.update_current_symbolic_state()
         success = self.humoro_lgp.symbolic_plan()
         if not replan:
@@ -114,7 +114,8 @@ class HumoroDynamicLGP(DynamicLGP):
             self.humoro_lgp.increase_timestep()
             if self.humoro_lgp.lgp_t > self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():
                 break
-            time.sleep(1 / self.humoro_lgp.sim_fps)
+            if sleep:
+                time.sleep(1 / self.humoro_lgp.sim_fps)
         self.humoro_lgp.update_workspace()
         self.humoro_lgp.update_current_symbolic_state()
         if self.check_goal_reached():

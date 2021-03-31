@@ -26,10 +26,10 @@ class TrajectoryConstraintObjective:
         self.objective = None
         # ipopt options
         self.ipopt_options = {
-            'tol': kwargs.get('tol', 1e-2),
+            'tol': kwargs.get('tol', 9e-3),
             'acceptable_tol': kwargs.get('tol', 5e-3),
             'acceptable_constr_viol_tol': kwargs.get('acceptable_constr_viol_tol', 5e-1),
-            'constr_viol_tol': kwargs.get('constr_viol_tol', 5e-2),
+            'constr_viol_tol': kwargs.get('constr_viol_tol', 2e-2),
             'max_iter': kwargs.get('max_iter', 200),
             # 'bound_relax_factor': kwargs.get('bound_relax_factor', 0),
             'obj_scaling_factor': kwargs.get('obj_scaling_factor', 1e+2)
@@ -54,7 +54,7 @@ class TrajectoryConstraintObjective:
         self.s_obstacles = kwargs.get('s_obstacles', 1e+3)
         self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 7)
         self.s_obstacle_gamma = kwargs.get('s_obstacle_gamma', 60)
-        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0.05)
+        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0.)
         self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1)
         self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstacle_constraint', True)
         self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+4)

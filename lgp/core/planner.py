@@ -650,7 +650,7 @@ class HumoroLGP(LGP):
         if self.plan is not None:
             t = 0
             for a in self.plan[1]:
-                if t >= self.symbolic_elapsed_t:
+                if t + a.duration > self.symbolic_elapsed_t:
                     if a.name == 'move':
                         return True
                 t += a.duration

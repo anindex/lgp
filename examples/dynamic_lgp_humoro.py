@@ -35,4 +35,4 @@ engine = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, ro
 engine.init_planner(**config)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=False)
+engine.run(replan=True)
