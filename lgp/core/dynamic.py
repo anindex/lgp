@@ -2,7 +2,6 @@ import numpy as np
 import pybullet as p
 import time
 import logging
-from lgp.utils.helpers import load_yaml_config
 from lgp.logic.parser import PDDLParser
 from lgp.core.planner import HumoroLGP
 from lgp.geometry.geometry import get_angle, get_point_on_circle
@@ -13,7 +12,8 @@ import os
 import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(_path_file, "../../../humoro"))
-from humoro.trajectory import Trajectory
+from examples.prediction.hmp_interface import HumanRollout
+
 
 class DynamicLGP(object):
     '''
@@ -21,11 +21,11 @@ class DynamicLGP(object):
     '''
     def __init__(self, **kwargs):
         domain_file = kwargs.get('domain_file')
-        problem_file = kwargs.get('problem_file')
-        config_file = kwargs.get('config_file')
+        problem_file = kwargs.get('problem_file', None)
         self.domain = PDDLParser.parse_domain(domain_file)
-        self.problem = PDDLParser.parse_problem(problem_file)
-        self.config = load_yaml_config(config_file)
+        self.problem = None
+        if problem_file is not None:
+            self.problem = PDDLParser.parse_problem(problem_file)
     
     def run(self):
         raise NotImplementedError()
@@ -39,14 +39,16 @@ class HumoroDynamicLGP(DynamicLGP):
 
     def __init__(self, **kwargs):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
-        self.humoro_lgp = HumoroLGP(self.domain, self.problem, self.config, **kwargs)
-        # parameters
-        self.trigger_period = self.config['lgp'].get('trigger_period', 10)  # timesteps
-        self.timeout = self.config['lgp'].get('timeout', 100)  # seconds
+        path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
+        self.humoro_lgp = HumoroLGP(self.domain, HumanRollout(path_to_mogaze=path_to_mogaze), **kwargs)
         # useful variables
-        self.player = self.humoro_lgp.workspace.hr.p
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
         self.handling_circle = Circle(np.zeros(2), radius=0.3)
+    
+    def init_planner(self, **kwargs):
+        if 'problem' not in kwargs:
+            kwargs['problem'] = self.problem
+        self.humoro_lgp.init_planner(**kwargs)
         self.prev_robot_pos = self.humoro_lgp.workspace.get_robot_geometric_state()
         self.q = [0, 0, 0, 1]
         self.z_angle = 0.
@@ -67,7 +69,7 @@ class HumoroDynamicLGP(DynamicLGP):
             self.z_angle = z_angle if grad[1] > 0 else -z_angle
             self.q = p.getQuaternionFromEuler([0, 0, self.z_angle])  # + pi/2 due to default orientation of pepper is x-axis
         self.prev_robot_pos = current_robot_pos
-        p.resetBasePositionAndOrientation(self.player._robots[self.robot_frame], [*current_robot_pos, 0], self.q)
+        p.resetBasePositionAndOrientation(self.humoro_lgp.player._robots[self.robot_frame], [*current_robot_pos, 0], self.q)
         # update object
         if self.humoro_lgp.plan is not None:
             current_action = self.humoro_lgp.get_current_action()
@@ -76,12 +78,12 @@ class HumoroDynamicLGP(DynamicLGP):
                 box = self.humoro_lgp.workspace.kin_tree.nodes[location]['link_obj']
                 x = np.random.uniform(box.origin[0] - box.dim[0] / 2, box.origin[0] + box.dim[0] / 2)  # TODO: should be desired place_pos on location, or add an animation of placing here
                 y = np.random.uniform(box.origin[1] - box.dim[1] / 2, box.origin[1] + box.dim[1] / 2)
-                p.resetBasePositionAndOrientation(self.player._objects[obj], [x, y, 0.735], [0, 0, 0, 1])  # currently ignore object orientation
+                p.resetBasePositionAndOrientation(self.humoro_lgp.player._objects[obj], [x, y, 0.735], [0, 0, 0, 1])  # currently ignore object orientation
             elif robot.couplings:
                 for obj in robot.couplings:
                     self.handling_circle.origin = current_robot_pos
                     handling_pos = get_point_on_circle(self.z_angle, self.handling_circle)
-                    p.resetBasePositionAndOrientation(self.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
+                    p.resetBasePositionAndOrientation(self.humoro_lgp.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
     def run(self, replan=False):
         self.humoro_lgp.update_current_symbolic_state()
@@ -91,9 +93,9 @@ class HumoroDynamicLGP(DynamicLGP):
         if not success:
             HumoroDynamicLGP.logger.info('Task failed!')
             return
-        max_t = self.timeout * self.humoro_lgp.ratio
+        max_t = self.humoro_lgp.timeout * self.humoro_lgp.ratio
         while self.humoro_lgp.lgp_t < max_t:
-            if replan and (self.humoro_lgp.lgp_t % (self.trigger_period * self.humoro_lgp.ratio) == 0):
+            if replan and (self.humoro_lgp.lgp_t % (self.humoro_lgp.trigger_period * self.humoro_lgp.ratio) == 0):
                 self.humoro_lgp.update_current_symbolic_state()
                 if self.humoro_lgp.plan is None:
                     success = self.humoro_lgp.symbolic_plan()
@@ -110,7 +112,7 @@ class HumoroDynamicLGP(DynamicLGP):
                 self.update_visualization()
             self.humoro_lgp.visualize()
             self.humoro_lgp.increase_timestep()
-            if self.humoro_lgp.lgp_t >= self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():
+            if self.humoro_lgp.lgp_t > self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():
                 break
             time.sleep(1 / self.humoro_lgp.sim_fps)
         self.humoro_lgp.update_workspace()

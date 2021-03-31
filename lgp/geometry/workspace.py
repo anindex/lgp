@@ -129,7 +129,7 @@ class YamlWorkspace(LGPWorkspace):
             tree.add_node(self.GLOBAL_FRAME, link_obj=env_obj, type_obj='env', color=[1, 1, 1, 1], movable=False)
             tree.add_node('robot', link_obj=robot_obj, type_obj='robot', color=[0, 1, 0, 1], movable=True)
             tree.add_edge(self.GLOBAL_FRAME, 'robot')
-            self.robots[link] = robot_obj
+            self.robots['robot'] = robot_obj
         return tree
 
     def clear_paths(self):
@@ -264,11 +264,10 @@ class HumoroWorkspace(YamlWorkspace):
         self.robot_model_file = kwargs.get('robot_model_file', 'data/models/cube.urdf')
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
         self.hr = hr
-        self.constant_symbols = frozenset()
         self._symbolic_state = frozenset()
 
     def set_parameters(self, **kwargs):
-        self.segment = kwargs.get('segment', None)
+        self.segment = kwargs.get('segment')
         self.human_carry = kwargs.get('human_carry', 0)
         self.prediction = kwargs.get('prediction', False)
         self.objects = set(kwargs['objects'])
@@ -276,8 +275,9 @@ class HumoroWorkspace(YamlWorkspace):
             fraction = 1.0
         else:
             fraction = self.hr.get_fraction_duration(self.segment, self.human_carry)
-        self.duration = int(self.hr.get_segment_timesteps(segment) * fraction)
+        self.duration = int(round(self.hr.get_segment_timesteps(self.segment) * fraction))
         self.set_robot_geometric_state(self.INIT_ROBOT_POSE)  # reset initial robot pose
+        self.constant_symbols = frozenset()
 
     def set_constant_symbol(self, symbols):
         self.constant_symbols = frozenset_of_tuples(symbols)
@@ -372,7 +372,7 @@ class HumoroWorkspace(YamlWorkspace):
                     self.kin_tree.add_edge(global_frame, obj)
                 self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='point_obj', movable=True, color=[0, 1, 1, 0.9])
         # human
-        human_pos = self.hr.get_human_pos_2d(segment, 0)
+        human_pos = self.hr.get_human_pos_2d(self.segment, 0)
         link_obj = OBJECT_MAP['human'](origin=np.array(human_pos))
         self.kin_tree.add_node(self.HUMAN_FRAME, link_obj=link_obj, type_obj='human', movable=True, color=[0, 0, 1, 0.9])
         self.kin_tree.add_edge(global_frame, self.HUMAN_FRAME)

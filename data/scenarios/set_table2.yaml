@@ -17,7 +17,6 @@ lgp:
   enable_viewer: True
 
 workspace:
-  objects: ['cup_green', 'plate_blue']
   human_carry: 1
   tree:
     world:

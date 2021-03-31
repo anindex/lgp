@@ -14,6 +14,8 @@ DATASET_DIR = join(ROOT_DIR, 'datasets', 'mogaze')
 sys.path.append(ROOT_DIR)
 
 from lgp.core.dynamic import HumoroDynamicLGP
+from lgp.utils.helpers import load_yaml_config
+
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python lgp_planner_humoro.py set_table')
@@ -25,11 +27,12 @@ args = parser.parse_args()
 domain_file = join(DATA_DIR, 'domain_' + args.scenario + '.pddl')
 problem_file = join(DATA_DIR, 'problem_' + args.scenario + args.p + '.pddl')
 config_file = join(DATA_DIR, args.scenario + args.p + '.yaml')
+config = load_yaml_config(config_file)
 robot_model_file = join(MODEL_DIR, 'pepper.urdf')
-
 start_time = time.time()
-lgp = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, config_file=config_file, 
-                       robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR, verbose=args.v)
+engine = HumoroDynamicLGP(domain_file=domain_file, problem_file=problem_file, robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR,
+                          enable_viewer=args.v, verbose=args.v)
+engine.init_planner(**config)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-lgp.run(replan=False)
+engine.run(replan=False)

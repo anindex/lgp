@@ -19,12 +19,12 @@ class LogicPlanner(object):
         os.makedirs(self.cache_path, exist_ok=True)
     
     def init_planner(self, **kwargs):
-        self.problem = kwargs.get('problem', None)
+        self.problem = kwargs.get('problem')
         self.self_edge = kwargs.get('self_edge', False)
         self.ignore_cache = kwargs.get('ignore_cache', False)
         self.cache_name = os.path.join(self.cache_path, self.problem.name + '.gpickle')
         # Grounding process, i.e. assign parameters substitutions to predicate actions to make propositional actions
-        self.ground_actions = self.domain.ground_actions(problem.objects)
+        self.ground_actions = self.domain.ground_actions(self.problem.objects)
         self.current_state = self.problem.state
         self.build_graph()
 

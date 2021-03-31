@@ -36,7 +36,7 @@ class TrajectoryConstraintObjective:
         }
         # viewer
         self.enable_viewer = kwargs.get('enable_viewer', False)
-        self.delay_viewer = kwargs.get('delay_viewer', 200)
+        self.delay_viewer = kwargs.get('delay_viewer', 150)
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)
@@ -50,17 +50,17 @@ class TrajectoryConstraintObjective:
         self.waypoint_manifolds = kwargs.get('waypoint_manifolds', None)
         self.goal_manifold = kwargs.get('goal_manifold', None)
         self.s_velocity_norm = kwargs.get('s_velocity_norm', 0)
-        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 10)
+        self.s_acceleration_norm = kwargs.get('s_acceleration_norm', 20)
         self.s_obstacles = kwargs.get('s_obstacles', 1e+3)
         self.s_obstacle_alpha = kwargs.get('s_obstacle_alpha', 7)
         self.s_obstacle_gamma = kwargs.get('s_obstacle_gamma', 60)
-        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0.1)
+        self.s_obstacle_margin = kwargs.get('s_obstacle_margin', 0.05)
         self.s_obstacle_constraint = kwargs.get('s_obstacle_constraint', 1)
-        self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstale_constraint', True)
-        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+2)
+        self.with_smooth_obstacle_constraint = kwargs.get('with_smooth_obstacle_constraint', True)
+        self.s_terminal_potential = kwargs.get('s_terminal_potential', 1e+4)
         self.with_goal_constraint = kwargs.get('with_goal_constraint', True)
         self.with_goal_manifold = kwargs.get('with_goal_manifold', True)
-        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1e+2)
+        self.s_waypoint_constraint = kwargs.get('s_waypoint_constraint', 1e+4)
         self.with_waypoint_constraint = kwargs.get('with_waypoint_constraint', True)
 
     def set_problem(self, **kwargs):
