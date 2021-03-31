@@ -2,8 +2,8 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Process
-from multiprocessing.sharedctypes import Value
-from ctypes import c_bool
+from multiprocessing.sharedctypes import Value, Array
+from ctypes import c_bool, c_double
 import operator
 from lgp.logic.planner import LogicPlanner
 from lgp.geometry.kinematics import Human, Robot, PointObject
@@ -431,12 +431,13 @@ class HumoroLGP(LGP):
             if self.enable_viewer:
                 self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
                 status = Value(c_bool, True)
-                p = Process(target=self.objectives[r[1]].optimize, args=(status,))
+                traj = Array(c_double, self.objectives[r[1]].n * (self.objectives[r[1]].T + 2))
+                p = Process(target=self.objectives[r[1]].optimize, args=(status, traj))
                 p.start()
                 self.viewer.run()
                 p.join()
                 success = status.value
-                traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
+                traj = Trajectory(q_init=np.array(traj[:2]), x=np.array(traj[2:]))
             else:
                 success, traj = self.objectives[r[1]].optimize()
             if success:  # choose this plan
@@ -490,12 +491,13 @@ class HumoroLGP(LGP):
             if self.enable_viewer:
                 self.viewer.initialize_viewer(objective, objective.trajectory)
                 status = Value(c_bool, True)
-                p = Process(target=objective.optimize, args=(status,))
+                traj = Array(c_double, objective.n * (objective.T + 2))
+                p = Process(target=objective.optimize, args=(status, traj))
                 p.start()
                 self.viewer.run()
                 p.join()
                 success = status.value
-                traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
+                traj = Trajectory(q_init=np.array(traj[:2]), x=np.array(traj[2:]))
             else:
                 success, traj = objective.optimize()
             if success:
@@ -532,12 +534,13 @@ class HumoroLGP(LGP):
                 if self.enable_viewer:
                     self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
                     status = Value(c_bool, True)
-                    p = Process(target=self.objectives[r[1]].optimize, args=(status,))
+                    traj = Array(c_double, self.objectives[r[1]].n * (self.objectives[r[1]].T + 2))
+                    p = Process(target=self.objectives[r[1]].optimize, args=(status, traj))
                     p.start()
                     self.viewer.run()
                     p.join()
                     success = status.value
-                    traj = Trajectory(q_init=self.viewer.q_init, x=self.viewer.active_x)
+                    traj = Trajectory(q_init=np.array(traj[:2]), x=np.array(traj[2:]))
                 else:
                     success, traj = self.objectives[r[1]].optimize()
                 if success:  # choose this plan
@@ -577,8 +580,8 @@ class HumoroLGP(LGP):
             return
         # currently there is only one path
         robot = self.workspace.get_robot_link_obj()
-        if self.geometric_elapsed_t > robot.paths[0].T():
-            t = robot.paths[0].T()
+        if self.geometric_elapsed_t > (robot.paths[0].T() + 1):
+            t = robot.paths[0].T() + 1
         else:
             t = self.geometric_elapsed_t
         self.workspace.set_robot_geometric_state(robot.paths[0].configuration(t))

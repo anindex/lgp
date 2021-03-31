@@ -129,7 +129,7 @@ class TrajectoryConstraintObjective:
         else:
             return 0.
 
-    def optimize(self, status=None, ipopt_options=None):
+    def optimize(self, status=None, traj=None, ipopt_options=None):
         if ipopt_options is None:
             ipopt_options = self.ipopt_options
         res = self.problem.optimize(
@@ -142,6 +142,8 @@ class TrajectoryConstraintObjective:
             TrajectoryConstraintObjective.logger.info('Gradient norm : %f' % np.linalg.norm(res.jac))
         if status is not None:  # get out status from multiprocessing
             status.value = res.success
+        if traj is not None:
+            traj[:] = self.trajectory.x().tolist()
         return res.success, self.trajectory
 
     @property
