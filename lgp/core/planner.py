@@ -20,10 +20,8 @@ from pyrieef.geometry.pixel_map import sdf
 import os
 import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(_path_file, "../../../humoro"))
 sys.path.append(os.path.join(_path_file, "../../../bewego"))
 from pybewego.workspace_viewer_server import WorkspaceViewerServer
-from examples.prediction.hmp_interface import HumanRollout
 
 
 class LGP(object):
@@ -160,32 +158,13 @@ class HumoroLGP(LGP):
     logger = logging.getLogger(__name__)
     SUPPORTED_ACTIONS = ('move', 'pick', 'place')
 
-    def __init__(self, domain, problem, config, **kwargs):
+    def __init__(self, domain, hr, **kwargs):
         self.verbose = kwargs.get('verbose', False)
         self.path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
-        lgp_config = config['lgp']
-        self.task_name = lgp_config.get('name', 'set_table')
-        self.task_id = lgp_config['task_id']
-        self.segment_id = lgp_config['segment_id']
-        self.sim_fps = lgp_config['sim_fps']  # simulation fps
-        self.fps = lgp_config['fps']  # sampling fps
-        self.human_freq = lgp_config.get('human_freq', 40)  # human placement frequency according to fps
-        self.traj_init = lgp_config.get('traj_init', 'outer')  # initialization scheme for trajectory
-        self.window_len = lgp_config.get('window_len', 'max')  # frames, according to this sampling fps
-        self.enable_viewer = lgp_config.get('enable_viewer', False)
-        self.ratio = int(self.sim_fps / self.fps)
-        self.logic_planner = LogicPlanner(domain, problem, **config['logic'])  # this will also build feasibility graph
-        self.workspace = HumoroWorkspace(hr=HumanRollout(path_to_mogaze=self.path_to_mogaze, fps=self.sim_fps), 
-                                         config=config['workspace'], **kwargs)
-        self.workspace.initialize_workspace_from_humoro(self.task_id, self.segment_id)
-        if self.window_len == 'max':
-            self.window_len = int(self.workspace.duration / self.ratio)
-        self.player = self.workspace.hr.p
-        init_symbols = self.symbol_sanity_check()
-        constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
-        self.workspace.set_constant_symbol(constant_symbols)
-        self.human_radius = 0.25
-        self._precompute_human_placement()
+        self.enable_viewer = kwargs.get('enable_viewer', False)
+        self.logic_planner = LogicPlanner(domain)  # this will also build feasibility graph
+        self.workspace = HumoroWorkspace(hr, **kwargs)
+        self.player = hr.p
         self.landmarks = {
             'table': get_point_on_circle(np.pi/2, self.workspace.kin_tree.nodes['table']['limit']),
             'big_shelf': get_point_on_circle(np.pi, self.workspace.kin_tree.nodes['big_shelf']['limit']),
@@ -202,6 +181,35 @@ class HumoroLGP(LGP):
         # viewers
         if self.enable_viewer == True:
             self.viewer = WorkspaceViewerServer(Workspace(), use_gl=False)
+
+    def init_planner(self, **kwargs):
+        # LGP params
+        self.trigger_period = kwargs.get('trigger_period', 10)  # with fps
+        self.timeout = kwargs.get('timeout', 200)  # fps timesteps
+        self.sim_fps = kwargs.get('sim_fps', 120)  # simulation fps
+        self.fps = kwargs.get('fps', 10)  # sampling fps
+        self.human_freq = kwargs.get('human_freq', 40)  # human placement frequency according to fps
+        self.traj_init = kwargs.get('traj_init', 'outer')  # initialization scheme for trajectory
+        self.window_len = kwargs.get('window_len', 'max')  # frames, according to this sampling fps
+        self.ratio = int(self.sim_fps / self.fps)
+        # logic planner params
+        problem = kwargs.get('problem', None)
+        ignore_cache = kwargs.get('ignore_cache', False)
+        # workspace
+        segment = kwargs.get('segment', None)
+        human_carry = kwargs.get('human_carry', 0)
+        prediction = kwargs.get('prediction', False)
+        objects = set(kwargs['objects'])
+        # init components
+        self.logic_planner.init_planner(problem=problem, ignore_cache=ignore_cache)
+        self.workspace.initialize_workspace_from_humoro(segment=segment, human_carry=human_carry, prediction=prediction, objects=objects)
+        if self.window_len == 'max':
+            self.window_len = int(self.workspace.duration / self.ratio)
+        init_symbols = self.symbol_sanity_check()
+        constant_symbols = [p for p in init_symbols if p[0] not in self.workspace.DEDUCED_PREDICATES]
+        self.workspace.set_constant_symbol(constant_symbols)
+        self._precompute_human_placement()
+        self.reset()
 
     def reset(self):
         self.clear_plan()
@@ -370,7 +378,7 @@ class HumoroLGP(LGP):
             if self.human_freq == 'once':
                 segment = self.workspace.segments[self.segment_id]
                 human_pos = self.workspace.hr.get_human_pos_2d(segment, self.t)
-                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=self.human_radius)
+                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
             elif self.human_freq == 'human-at':
                 for t in self.human_placements:
                     if t >= self.t:
@@ -383,7 +391,7 @@ class HumoroLGP(LGP):
                             break
                     segment = self.workspace.segments[self.segment_id]
                     human_pos = self.workspace.hr.get_human_pos_2d(segment, sim_t)
-                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=self.human_radius)
+                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
 
     def symbolic_plan(self, alternative=True, verify_plan=False):
         '''
@@ -683,7 +691,7 @@ class HumoroLGP(LGP):
             if at and not prev_at:
                 segment = self.workspace.segments[self.segment_id]
                 human_pos = self.workspace.hr.get_human_pos_2d(segment, t)
-                self.human_placements[t] = Human(origin=human_pos, radius=self.human_radius)
+                self.human_placements[t] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
             prev_at = at
 
     def visualize(self):

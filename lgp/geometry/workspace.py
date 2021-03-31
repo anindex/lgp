@@ -73,8 +73,9 @@ class YamlWorkspace(LGPWorkspace):
     SUPPORTED_PREDICATES = ('at', 'on', 'carry', 'free', 'avoid_human')
     DEDUCED_PREDICATES = ('at', 'on', 'carry', 'free')
     GLOBAL_FRAME = 'world'
+    INIT_ROBOT_POSE = np.array([0, -3.])
 
-    def __init__(self, config, init_symbol=None, init=True, **kwargs):
+    def __init__(self, config=None, init_symbol=None, init=True, **kwargs):
         self.robots = {}
         self.humans = {}
         self.kin_tree = self.build_kinematic_tree(config)
@@ -100,27 +101,35 @@ class YamlWorkspace(LGPWorkspace):
             else:
                 YamlWorkspace.logger.warn('This symbol %s is not associated with any robot!' % str(symbol))
 
-    def build_kinematic_tree(self, config):
+    def build_kinematic_tree(self, config=None):
         tree = nx.DiGraph()
         fringe = deque()
-        fringe.append(config['tree'])
-        while fringe:
-            node = fringe.popleft()
-            for link in node:
-                typ = node[link]['property']['type_obj']
-                link_obj = OBJECT_MAP[typ](origin=np.array(node[link]['origin']), **node[link]['geometry'])
-                if typ == 'robot':
-                    link_obj.name = link
-                    self.robots[link] = link_obj
-                elif typ == 'human':
-                    link_obj.name = link
-                    self.humans[link] = link_obj
-                tree.add_node(link, link_obj=link_obj, **node[link]['property'])
-                if node[link]['children'] is not None:
-                    for child in node[link]['children']:
-                        childname = list(child.keys())[0]
-                        tree.add_edge(link, childname)
-                        fringe.append(child)
+        if config is not None:
+            fringe.append(config['tree'])
+            while fringe:
+                node = fringe.popleft()
+                for link in node:
+                    typ = node[link]['property']['type_obj']
+                    link_obj = OBJECT_MAP[typ](origin=np.array(node[link]['origin']), **node[link]['geometry'])
+                    if typ == 'robot':
+                        link_obj.name = link
+                        self.robots[link] = link_obj
+                    elif typ == 'human':
+                        link_obj.name = link
+                        self.humans[link] = link_obj
+                    tree.add_node(link, link_obj=link_obj, **node[link]['property'])
+                    if node[link]['children'] is not None:
+                        for child in node[link]['children']:
+                            childname = list(child.keys())[0]
+                            tree.add_edge(link, childname)
+                            fringe.append(child)
+        else:
+            env_obj = OBJECT_MAP['env'](origin=np.zeros(2), dim=np.array([7., 7.]))
+            robot_obj = OBJECT_MAP['robot'](origin=self.INIT_ROBOT_POSE, radius=0.1)  # robot default init
+            tree.add_node(self.GLOBAL_FRAME, link_obj=env_obj, type_obj='env', color=[1, 1, 1, 1], movable=False)
+            tree.add_node('robot', link_obj=robot_obj, type_obj='robot', color=[0, 1, 0, 1], movable=True)
+            tree.add_edge(self.GLOBAL_FRAME, 'robot')
+            self.robots[link] = robot_obj
         return tree
 
     def clear_paths(self):
@@ -247,22 +256,28 @@ class HumoroWorkspace(YamlWorkspace):
     SUPPORTED_PREDICATES = ('agent-at', 'agent-avoid-human', 'agent-carry', 'agent-free', 'agent-avoid-human', 'on', 'human-at', 'human-carry')
     DEDUCED_PREDICATES = ('on', 'human-at', 'human-carry', 'agent-at', 'agent-carry', 'agent-free')
     VERIFY_PREDICATES = ('human-at', 'human-carry')
-    HUMAN_FRAME = 'human'
+    HUMAN_FRAME = 'Human1'
+    HUMAN_RADIUS = 0.2
 
-    def __init__(self, hr, config, **kwargs):
-        super(HumoroWorkspace, self).__init__(config, init=False, **kwargs)
+    def __init__(self, hr, **kwargs):
+        super(HumoroWorkspace, self).__init__(init=False, **kwargs)
         self.robot_model_file = kwargs.get('robot_model_file', 'data/models/cube.urdf')
-        self.hr = hr
-        self.task_id = 0
-        self.segment_id = 1
-        self.segments = []
-        self.duration = 0
-        self.human_carry = config.get('human_carry', 3)
-        self.objects = set(config['objects'])
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
-        self.human_frame = 'Human1'
+        self.hr = hr
         self.constant_symbols = frozenset()
         self._symbolic_state = frozenset()
+
+    def set_parameters(self, **kwargs):
+        self.segment = kwargs.get('segment', None)
+        self.human_carry = kwargs.get('human_carry', 0)
+        self.prediction = kwargs.get('prediction', False)
+        self.objects = set(kwargs['objects'])
+        if self.prediction or self.human_carry == 'all':
+            fraction = 1.0
+        else:
+            fraction = self.hr.get_fraction_duration(self.segment, self.human_carry)
+        self.duration = int(self.hr.get_segment_timesteps(segment) * fraction)
+        self.set_robot_geometric_state(self.INIT_ROBOT_POSE)  # reset initial robot pose
 
     def set_constant_symbol(self, symbols):
         self.constant_symbols = frozenset_of_tuples(symbols)
@@ -279,7 +294,7 @@ class HumoroWorkspace(YamlWorkspace):
     def get_prediction_predicates(self, t):
         if t > self.duration:
             return []
-        return self.hr.get_predicates(self.segments[self.segment_id], t)
+        return self.hr.get_predicates(self.segment, t)
 
     def get_location(self, x):
         for loc in self.locations:
@@ -298,24 +313,14 @@ class HumoroWorkspace(YamlWorkspace):
             if n != self.robot_frame and n != YamlWorkspace.GLOBAL_FRAME:
                 self.kin_tree.remove_node(n)
 
-    def initialize_workspace_from_humoro(self, task_id, segment_id, human_carry=None, prediction=False):
+    def initialize_workspace_from_humoro(self, **kwargs):
         '''
         Initialize workspace using interface from humoro
         '''
-        if human_carry is None:
-            human_carry = self.human_carry
-        self.task_id = task_id
-        self.segment_id = segment_id
-        self.segments = self.hr.get_data_segments(taskid=task_id)
-        segment = self.segments[self.segment_id]
-        if prediction or human_carry == 'all':
-            fraction = 1.0
-        else:
-            fraction = self.hr.get_fraction_duration(segment, human_carry)
-        self.duration = int(self.hr.get_segment_timesteps(segment) * fraction)
+        self.set_parameters(**kwargs)
         global_frame = self.GLOBAL_FRAME
-        self.hr.load_for_playback(segment)
-        self.hr.visualize_frame(segment, 0)
+        self.hr.load_for_playback(self.segment)
+        self.hr.visualize_frame(self.segment, 0)
         self.clear_workspace()
         # obstables
         for obj in self.hr.obstacles:
@@ -369,8 +374,8 @@ class HumoroWorkspace(YamlWorkspace):
         # human
         human_pos = self.hr.get_human_pos_2d(segment, 0)
         link_obj = OBJECT_MAP['human'](origin=np.array(human_pos))
-        self.kin_tree.add_node(self.human_frame, link_obj=link_obj, type_obj='human', movable=True, color=[0, 0, 1, 0.9])
-        self.kin_tree.add_edge(global_frame, self.human_frame)
+        self.kin_tree.add_node(self.HUMAN_FRAME, link_obj=link_obj, type_obj='human', movable=True, color=[0, 0, 1, 0.9])
+        self.kin_tree.add_edge(global_frame, self.HUMAN_FRAME)
         # init geometric state
         self.update_geometric_state()
         # init symbolic state
@@ -384,8 +389,8 @@ class HumoroWorkspace(YamlWorkspace):
         Update workspace with human pos and movable objects (for now all are global coordinate)
         '''
         if t <= self.duration:
-            human_pos = self.hr.get_human_pos_2d(self.segments[self.segment_id], t)
-            self.kin_tree.nodes[self.human_frame]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))
+            human_pos = self.hr.get_human_pos_2d(self.segment, t)
+            self.kin_tree.nodes[self.HUMAN_FRAME]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))
         for obj in self.objects:
             if obj in self.hr.p._objects:
                 if self.kin_tree.has_edge(self.robot_frame, obj):  # ignore carrying objects
@@ -429,7 +434,7 @@ class HumoroWorkspace(YamlWorkspace):
         self._symbolic_state = frozenset_of_tuples(preds).union(self.constant_symbols)
 
     def visualize_frame(self, t):
-        self.hr.visualize_frame(self.segments[self.segment_id], t)
+        self.hr.visualize_frame(self.segment, t)
 
     @property
     def symbolic_state(self):
