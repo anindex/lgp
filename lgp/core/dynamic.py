@@ -40,7 +40,8 @@ class HumoroDynamicLGP(DynamicLGP):
     def __init__(self, **kwargs):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
         path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
-        self.humoro_lgp = HumoroLGP(self.domain, HumanRollout(path_to_mogaze=path_to_mogaze), **kwargs)
+        self.hr = HumanRollout(path_to_mogaze=path_to_mogaze)
+        self.humoro_lgp = HumoroLGP(self.domain, self.hr, **kwargs)
         # useful variables
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
         self.handling_circle = Circle(np.zeros(2), radius=0.3)
