@@ -15,12 +15,13 @@ from lgp.experiment.pipeline import Experiment
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python lgp_planner_humoro.py set_table')
 parser.add_argument('-s', help='The scenario name of the domain, problem file', type=str, default='set_table')
-parser.add_argument('-c', help='number of human carry', type=int, default=4)
+parser.add_argument('-c', help='number of human carry', type=int, default=3)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 
 start_time = time.time()
-engine = Experiment(task=args.s, human_carry=args.c, verbose=args.v)
+experiment = Experiment(task=args.s, human_carry=args.c, verbose=args.v)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run()
+experiment.run()
+experiment.save_data()

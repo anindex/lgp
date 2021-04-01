@@ -81,6 +81,33 @@ class HumoroDynamicLGP(DynamicLGP):
         self.dynamic_actual_path = None
         self.dynamic_complete_time = 0
         self.dynamic_reduction_ratio = 0.
+    
+    def get_experiment_data(self):
+        data = {
+            'single_symbolic_plan_time': self.single_symbolic_plan_time,
+            'single_plans': self.single_plans,
+            'single_chosen_plan_id': self.single_chosen_plan_id,
+            'single_perceive_human_objects': self.single_perceive_human_objects,
+            'single_geometric_plan_time': self.single_geometric_plan_time,
+            'single_plan_costs': self.single_plan_costs,
+            'single_num_failed_plan': self.single_num_failed_plan,
+            'single_actual_path': self.single_actual_path,
+            'single_complete_time': self.single_complete_time,
+            'single_reduction_ratio': self.single_reduction_ratio,
+            'dynamic_symbolic_plan_time': self.dynamic_symbolic_plan_time,
+            'dynamic_plans': self.dynamic_plans,
+            'dynamic_chosen_plan_id': self.dynamic_chosen_plan_id,
+            'dynamic_perceive_human_objects': self.dynamic_perceive_human_objects,
+            'dynamic_geometric_plan_time': self.dynamic_geometric_plan_time,
+            'dynamic_plan_costs': self.dynamic_plan_costs,
+            'dynamic_num_failed_plans': self.dynamic_num_failed_plans,
+            'dynamic_num_change_plan': self.dynamic_num_change_plan,
+            'dynamic_actual_path': self.dynamic_actual_path,
+            'dynamic_complete_time': self.dynamic_complete_time,
+            'dynamic_reduction_ratio': self.dynamic_reduction_ratio,
+            'human_path': self.actual_human_path
+        }
+        return data
 
     def check_goal_reached(self):
         return self.humoro_lgp.logic_planner.current_state in self.humoro_lgp.logic_planner.goal_states
@@ -183,11 +210,11 @@ class HumoroDynamicLGP(DynamicLGP):
         self.humoro_lgp.update_current_symbolic_state()
         if not replan:
             self.single_actual_path = self.actual_robot_path
-            self.single_complete_time = self.humoro_lgp.lgp_t
+            self.single_complete_time = self.humoro_lgp.lgp_t / self.humoro_lgp.sim_fps
             self.single_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
         else:
             self.dynamic_actual_path = self.actual_robot_path
-            self.dynamic_complete_time = self.humoro_lgp.lgp_t
+            self.dynamic_complete_time = self.humoro_lgp.lgp_t / self.humoro_lgp.sim_fps
             self.dynamic_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
         if self.check_goal_reached():
             HumoroDynamicLGP.logger.info('Task complete successfully!')

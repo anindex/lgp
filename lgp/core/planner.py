@@ -177,7 +177,7 @@ class HumoroLGP(LGP):
     def init_planner(self, **kwargs):
         # LGP params
         self.trigger_period = kwargs.get('trigger_period', 10)  # with fps
-        self.timeout = kwargs.get('timeout', 500)  # fps timesteps
+        self.timeout = kwargs.get('timeout', 1000)  # fps timesteps
         self.sim_fps = kwargs.get('sim_fps', 120)  # simulation fps
         self.fps = kwargs.get('fps', 10)  # sampling fps
         self.human_freq = kwargs.get('human_freq', 40)  # human placement frequency according to fps
@@ -576,7 +576,7 @@ class HumoroLGP(LGP):
         string_plans = []
         for plan in self.plans:
             string_plan = []
-            for a in self.plan[1]:
+            for a in plan[1]:
                 string_plan.append(a.name + ' ' + ' '.join(a.parameters))
             string_plans.append(string_plan)
         return string_plans
