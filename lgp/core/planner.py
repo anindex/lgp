@@ -177,7 +177,7 @@ class HumoroLGP(LGP):
     def init_planner(self, **kwargs):
         # LGP params
         self.trigger_period = kwargs.get('trigger_period', 10)  # with fps
-        self.timeout = kwargs.get('timeout', 200)  # fps timesteps
+        self.timeout = kwargs.get('timeout', 500)  # fps timesteps
         self.sim_fps = kwargs.get('sim_fps', 120)  # simulation fps
         self.fps = kwargs.get('fps', 10)  # sampling fps
         self.human_freq = kwargs.get('human_freq', 40)  # human placement frequency according to fps
@@ -321,6 +321,7 @@ class HumoroLGP(LGP):
         return False
 
     def update_goal(self):
+        self.perceive_human_objects = []
         for t in range(self.window_len):
             symbols = self.workspace.get_prediction_predicates(self.t + t * self.ratio)
             obj = self._get_human_carry_obj(symbols)
@@ -332,6 +333,7 @@ class HumoroLGP(LGP):
                         self.logic_planner.current_state = self.logic_planner.current_state.difference(frozenset([state_p]))
                     if state_p is None or state_p[0] != 'agent-carry':
                         self.logic_planner.current_state = self.logic_planner.current_state.union(frozenset([goal_p]))
+                        self.perceive_human_objects.append(obj)
 
     def get_waypoints(self, plan=None):
         if plan is None:
@@ -415,7 +417,8 @@ class HumoroLGP(LGP):
         # prepare workspace
         self.place_human()
         workspace = self.workspace.get_pyrieef_ws()
-        ranking = []
+        self.ranking = []
+        self.chosen_plan_id = None
         # compute plan costs
         for i, plan in enumerate(self.plans):
             waypoints, waypoint_manifolds = self.get_waypoints(plan)
@@ -423,11 +426,11 @@ class HumoroLGP(LGP):
             objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
             objective.set_problem(workspace=workspace, trajectory=trajectory, waypoint_manifolds=waypoint_manifolds, goal_manifold=waypoint_manifolds[-1][0])
             self.objectives.append(objective)
-            ranking.append((objective.cost(), i))
+            self.ranking.append((objective.cost(), i))
         # rank the plans
-        ranking.sort(key=operator.itemgetter(0))
-        # optimize the objective according to ranking
-        for r in ranking:
+        self.ranking.sort(key=operator.itemgetter(0))
+        # optimize the objective according to self.ranking
+        for r in self.ranking:
             if self.enable_viewer:
                 self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
                 status = Value(c_bool, True)
@@ -442,6 +445,7 @@ class HumoroLGP(LGP):
                 success, traj = self.objectives[r[1]].optimize()
             if success:  # choose this plan
                 self.plan = self.plans[r[1]]
+                self.chosen_plan_id = r[1]
                 if self.verbose:
                     for a in self.plan[1]:
                         HumoroLGP.logger.info(a.name + ' ' + ' '.join(a.parameters))
@@ -509,7 +513,8 @@ class HumoroLGP(LGP):
                 HumoroLGP.logger.warn(f'Current symbolic plan becomes geometrically infeasible at time {self.lgp_t}. Trying replanning at next trigger.')
                 return False
         else:
-            ranking = []
+            self.ranking = []
+            self.chosen_plan_id = None
             for i, plan in enumerate(self.plans):
                 a, t = self._get_next_move(plan)
                 location = a.parameters[0]
@@ -526,11 +531,11 @@ class HumoroLGP(LGP):
                 objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
                 objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
                 self.objectives.append(objective)
-                ranking.append((objective.cost(), i))
+                self.ranking.append((objective.cost(), i))
             # rank the plans
-            ranking.sort(key=operator.itemgetter(0))
-            # optimize the objective according to ranking
-            for r in ranking:
+            self.ranking.sort(key=operator.itemgetter(0))
+            # optimize the objective according to self.ranking
+            for r in self.ranking:
                 if self.enable_viewer:
                     self.viewer.initialize_viewer(self.objectives[r[1]], self.objectives[r[1]].trajectory)
                     status = Value(c_bool, True)
@@ -545,6 +550,7 @@ class HumoroLGP(LGP):
                     success, traj = self.objectives[r[1]].optimize()
                 if success:  # choose this plan
                     self.plan = self.plans[r[1]]
+                    self.chosen_plan_id = r[1]
                     if self.verbose:
                         for a in self.plan[1]:
                             HumoroLGP.logger.info(a.name + ' ' + ' '.join(a.parameters))
@@ -563,6 +569,17 @@ class HumoroLGP(LGP):
                 return action
             t += action.duration
         return None
+
+    def get_list_plan_as_string(self):
+        if not self.plans:
+            return []
+        string_plans = []
+        for plan in self.plans:
+            string_plan = []
+            for a in self.plan[1]:
+                string_plan.append(a.name + ' ' + ' '.join(a.parameters))
+            string_plans.append(string_plan)
+        return string_plans
 
     def act(self, action=None, **kwargs):
         if action is None: # execute current action

@@ -36,7 +36,7 @@ class TrajectoryConstraintObjective:
         }
         # viewer
         self.enable_viewer = kwargs.get('enable_viewer', False)
-        self.delay_viewer = kwargs.get('delay_viewer', 150)
+        self.delay_viewer = kwargs.get('delay_viewer', 200)
 
     def set_parameters(self, **kwargs):
         self.workspace = kwargs.get('workspace', None)

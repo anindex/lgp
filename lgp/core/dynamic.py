@@ -45,6 +45,7 @@ class HumoroDynamicLGP(DynamicLGP):
         # useful variables
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
         self.handling_circle = Circle(np.zeros(2), radius=0.3)
+        self.reset_experiment()
     
     def init_planner(self, **kwargs):
         if 'problem' not in kwargs:
@@ -53,6 +54,33 @@ class HumoroDynamicLGP(DynamicLGP):
         self.prev_robot_pos = self.humoro_lgp.workspace.get_robot_geometric_state()
         self.q = [0, 0, 0, 1]
         self.z_angle = 0.
+        self.actual_robot_path = []
+        self.actual_human_path = []
+
+    def reset_experiment(self):
+        # single plan
+        self.single_symbolic_plan_time = 0
+        self.single_plans = []
+        self.single_chosen_plan_id = None
+        self.single_perceive_human_objects = []
+        self.single_geometric_plan_time = 0
+        self.single_plan_costs = []
+        self.single_num_failed_plan = 0
+        self.single_actual_path = None
+        self.single_complete_time = 0
+        self.single_reduction_ratio = 0.
+        # dynamic plan
+        self.dynamic_symbolic_plan_time = {}
+        self.dynamic_plans = {}
+        self.dynamic_chosen_plan_id = {}
+        self.dynamic_perceive_human_objects = {}
+        self.dynamic_geometric_plan_time = {}
+        self.dynamic_plan_costs = {}
+        self.dynamic_num_failed_plans = {}
+        self.dynamic_num_change_plan = 0
+        self.dynamic_actual_path = None
+        self.dynamic_complete_time = 0
+        self.dynamic_reduction_ratio = 0.
 
     def check_goal_reached(self):
         return self.humoro_lgp.logic_planner.current_state in self.humoro_lgp.logic_planner.goal_states
@@ -87,20 +115,51 @@ class HumoroDynamicLGP(DynamicLGP):
                     p.resetBasePositionAndOrientation(self.humoro_lgp.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
     def run(self, replan=False, sleep=False):
-        self.humoro_lgp.update_current_symbolic_state()
-        success = self.humoro_lgp.symbolic_plan()
         if not replan:
+            self.humoro_lgp.update_current_symbolic_state()
+            start_symbolic_plan = time.time()
+            success = self.humoro_lgp.symbolic_plan()
+            start_geometric_plan = time.time()
+            self.single_symbolic_plan_time = start_geometric_plan - start_symbolic_plan
             success = self.humoro_lgp.geometric_plan()
-        if not success:
-            HumoroDynamicLGP.logger.info('Task failed!')
-            return
+            self.single_geometric_plan_time = time.time() - start_geometric_plan
+            self.single_plans = self.humoro_lgp.get_list_plan_as_string()
+            self.single_chosen_plan_id = self.humoro_lgp.chosen_plan_id
+            self.single_perceive_human_objects = self.humoro_lgp.perceive_human_objects
+            self.single_plan_costs = self.humoro_lgp.ranking
+            for r in self.humoro_lgp.ranking:
+                if r[1] == self.humoro_lgp.chosen_plan_id:
+                    break
+                self.single_num_failed_plan += 1
+            if not success:
+                HumoroDynamicLGP.logger.info('Task failed!')
+                return False
         max_t = self.humoro_lgp.timeout * self.humoro_lgp.ratio
         while self.humoro_lgp.lgp_t < max_t:
             if replan and (self.humoro_lgp.lgp_t % (self.humoro_lgp.trigger_period * self.humoro_lgp.ratio) == 0):
                 self.humoro_lgp.update_current_symbolic_state()
                 if self.humoro_lgp.plan is None:
+                    self.dynamic_num_change_plan += 1
+                    start_symbolic_plan = time.time()
                     success = self.humoro_lgp.symbolic_plan()
+                    self.dynamic_symbolic_plan_time[self.humoro_lgp.lgp_t] = time.time() - start_symbolic_plan
+                    self.dynamic_perceive_human_objects[self.humoro_lgp.lgp_t] = self.humoro_lgp.perceive_human_objects
+                start_geometric_plan = time.time()
                 success = self.humoro_lgp.geometric_replan()
+                self.dynamic_geometric_plan_time[self.humoro_lgp.lgp_t] = time.time() - start_geometric_plan
+                if self.humoro_lgp.lgp_t in self.dynamic_symbolic_plan_time:
+                    self.dynamic_chosen_plan_id[self.humoro_lgp.lgp_t] = self.humoro_lgp.chosen_plan_id
+                    self.dynamic_plans[self.humoro_lgp.lgp_t] = self.humoro_lgp.get_list_plan_as_string()
+                    self.dynamic_plan_costs[self.humoro_lgp.lgp_t] = self.humoro_lgp.ranking
+                    if success:
+                        n = 0
+                        for r in self.humoro_lgp.ranking:
+                            if r[1] == self.humoro_lgp.chosen_plan_id:
+                                break
+                        n += 1
+                        self.dynamic_num_failed_plans[self.humoro_lgp.lgp_t] = n
+                    else:
+                        self.dynamic_num_failed_plans[self.humoro_lgp.lgp_t] = len(self.humoro_lgp.ranking)
             if self.humoro_lgp.lgp_t % self.humoro_lgp.ratio == 0:
                 # executing current action in the plan
                 if replan:
@@ -111,6 +170,9 @@ class HumoroDynamicLGP(DynamicLGP):
                 self.humoro_lgp.update_workspace()
                 # reflecting changes in PyBullet
                 self.update_visualization()
+                # recording paths
+                self.actual_robot_path.append(self.humoro_lgp.workspace.get_robot_geometric_state())
+                self.actual_human_path.append(self.humoro_lgp.workspace.get_human_geometric_state())
             self.humoro_lgp.visualize()
             self.humoro_lgp.increase_timestep()
             if self.humoro_lgp.lgp_t > self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():
@@ -119,8 +181,18 @@ class HumoroDynamicLGP(DynamicLGP):
                 time.sleep(1 / self.humoro_lgp.sim_fps)
         self.humoro_lgp.update_workspace()
         self.humoro_lgp.update_current_symbolic_state()
+        if not replan:
+            self.single_actual_path = self.actual_robot_path
+            self.single_complete_time = self.humoro_lgp.lgp_t
+            self.single_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
+        else:
+            self.dynamic_actual_path = self.actual_robot_path
+            self.dynamic_complete_time = self.humoro_lgp.lgp_t
+            self.dynamic_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
         if self.check_goal_reached():
             HumoroDynamicLGP.logger.info('Task complete successfully!')
+            return True
         else:
             HumoroDynamicLGP.logger.info('Task failed!')
+            return False
             

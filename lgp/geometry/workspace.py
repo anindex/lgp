@@ -265,6 +265,7 @@ class HumoroWorkspace(YamlWorkspace):
         self.robot_frame = list(self.robots.keys())[0]   # for now only support one robot
         self.hr = hr
         self._symbolic_state = frozenset()
+        self.robot_spawned = False
 
     def set_parameters(self, **kwargs):
         self.segment = kwargs.get('segment')
@@ -290,6 +291,9 @@ class HumoroWorkspace(YamlWorkspace):
     
     def get_robot_link_obj(self):
         return self.robots[self.robot_frame]
+    
+    def get_human_geometric_state(self):
+        return self.geometric_state[self.HUMAN_FRAME]
 
     def get_prediction_predicates(self, t):
         if t > self.duration:
@@ -309,7 +313,7 @@ class HumoroWorkspace(YamlWorkspace):
         return 'unknown'
 
     def clear_workspace(self):
-        for n in self.kin_tree.nodes():
+        for n in list(self.kin_tree.nodes()):
             if n != self.robot_frame and n != YamlWorkspace.GLOBAL_FRAME:
                 self.kin_tree.remove_node(n)
 
@@ -333,7 +337,7 @@ class HumoroWorkspace(YamlWorkspace):
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.8, .8]))
-        area = Circle(origin=np.array(pos[:2]), radius=1.05)
+        area = Circle(origin=np.array(pos[:2]), radius=1.1)
         limit = Circle(origin=np.array(pos[:2]), radius=1.0)
         self.kin_tree.add_node('table', link_obj=link_obj, area=area, limit=limit, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'table')
@@ -381,7 +385,9 @@ class HumoroWorkspace(YamlWorkspace):
         # init symbolic state
         self.update_symbolic_state()
         # init robot pos
-        self.hr.p.spawnRobot(self.robot_frame, urdf=self.robot_model_file)
+        if not self.robot_spawned:
+            self.hr.p.spawnRobot(self.robot_frame, urdf=self.robot_model_file)
+            self.robot_spawned = True
         p.resetBasePositionAndOrientation(self.hr.p._robots[self.robot_frame], [*self.get_robot_geometric_state(), 0], [0, 0, 0, 1])
 
     def update_workspace(self, t):
