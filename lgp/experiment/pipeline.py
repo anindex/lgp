@@ -29,8 +29,12 @@ class Experiment(object):
         self.data_dir = kwargs.get('data_dir', _data_dir)
         self.data_name = join(self.data_dir, self.task + str(datetime.now()))
         os.makedirs(self.data_dir, exist_ok=True)
-        self.engine = HumoroDynamicLGP(domain_file=domain_file, robot_model_file=robot_model_file, path_to_mogaze=mogaze_dir, verbose=self.verbose)
+        sim_fps = kwargs.get('sim_fps', 120)
+        prediction = kwargs.get('prediction', False)
+        self.engine = HumoroDynamicLGP(domain_file=domain_file, robot_model_file=robot_model_file, path_to_mogaze=mogaze_dir, 
+                                       sim_fps=sim_fps, prediction=prediction, verbose=self.verbose)
         # experiment params
+        self.test_segments = kwargs.get('test_segments', None)  # test segments takes precedent
         self.total_pnp = kwargs.get('total_pnp', [6, 7])
         self.taskid = kwargs.get('taskid', [2, 3])  # set table for 2, 3 people
         self.human_carry = kwargs.get('human_carry', 3)
@@ -44,14 +48,20 @@ class Experiment(object):
     def get_segments(self):
         self.segments = {}
         domain = self.engine.humoro_lgp.logic_planner.domain
-        for i in self.taskid:
-            segments = self.engine.hr.get_data_segments(taskid=i)
-            for segment in segments:
-                objects = self.engine.hr.get_object_carries(segment)
-                n_carries = len(objects)
-                if n_carries in self.total_pnp:
-                    self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
-                                                                                 self.start_agent_symbols, self.end_agent_symbols)
+        if self.test_segments is None:
+            for i in self.taskid:
+                segments = self.engine.hr.get_data_segments(taskid=i)
+                for segment in segments:
+                    objects = self.engine.hr.get_object_carries(segment)
+                    n_carries = len(objects)
+                    if n_carries in self.total_pnp:
+                        self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
+                                                                                    self.start_agent_symbols, self.end_agent_symbols)
+        else:
+            for segment in self.test_segments:
+                objects = self.engine.hr.get_object_carries(segment, predicting=False)
+                self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
+                                                                             self.start_agent_symbols, self.end_agent_symbols)
     
     def save_data(self):
         with open(self.data_name, 'wb') as f:
@@ -77,9 +87,12 @@ class Experiment(object):
 
     @staticmethod
     def get_problem_from_segment(hr, segment, domain, objects, start_agent_symbols, end_agent_symbols):
-        init_pred = hr.get_object_predicates(segment, 0)
+        '''
+        Infer problem from dataset, human prediction can differ from the goal here, which the robot has to adapt to solve this problem
+        '''
+        init_pred = hr.get_object_predicates(segment, 0, predicting=False)
         init_pred = [p for p in init_pred if p[1] in objects]
-        final_pred = hr.get_object_predicates(segment, segment[2] - segment[1])
+        final_pred = hr.get_object_predicates(segment, segment[2] - segment[1], predicting=False)
         final_pred = [p for p in final_pred if p[1] in objects]
         # resolve human-carry predicate
         for p in final_pred:

@@ -40,7 +40,9 @@ class HumoroDynamicLGP(DynamicLGP):
     def __init__(self, **kwargs):
         super(HumoroDynamicLGP, self).__init__(**kwargs)
         path_to_mogaze = kwargs.get('path_to_mogaze', 'datasets/mogaze')
-        self.hr = HumanRollout(path_to_mogaze=path_to_mogaze)
+        self.sim_fps = kwargs.get('sim_fps', 120)
+        self.prediction = kwargs.get('prediction', False)
+        self.hr = HumanRollout(path_to_mogaze=path_to_mogaze, fps=self.sim_fps, predicting=self.prediction, load_predictions=True)
         self.humoro_lgp = HumoroLGP(self.domain, self.hr, **kwargs)
         # useful variables
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
@@ -50,6 +52,8 @@ class HumoroDynamicLGP(DynamicLGP):
     def init_planner(self, **kwargs):
         if 'problem' not in kwargs:
             kwargs['problem'] = self.problem
+        kwargs['sim_fps'] = self.sim_fps
+        kwargs['prediction'] = self.prediction
         self.humoro_lgp.init_planner(**kwargs)
         self.prev_robot_pos = self.humoro_lgp.workspace.get_robot_geometric_state()
         self.q = [0, 0, 0, 1]

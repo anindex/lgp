@@ -276,7 +276,7 @@ class HumoroWorkspace(YamlWorkspace):
             fraction = 1.0
         else:
             fraction = self.hr.get_fraction_duration(self.segment, self.human_carry)
-        self.duration = int(self.hr.get_segment_timesteps(self.segment) * fraction) + 1
+        self.duration = int(self.hr.get_segment_timesteps(self.segment) * fraction) + (1 if fraction != 1.0 else 0)
         self.set_robot_geometric_state(self.INIT_ROBOT_POSE)  # reset initial robot pose
         self.constant_symbols = frozenset()
 
@@ -296,7 +296,7 @@ class HumoroWorkspace(YamlWorkspace):
         return self.geometric_state[self.HUMAN_FRAME]
 
     def get_prediction_predicates(self, t):
-        if t > self.duration:
+        if t >= self.duration:
             return []
         return self.hr.get_predicates(self.segment, t)
 
@@ -337,7 +337,7 @@ class HumoroWorkspace(YamlWorkspace):
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.8, .8]))
-        area = Circle(origin=np.array(pos[:2]), radius=1.1)
+        area = Circle(origin=np.array(pos[:2]), radius=1.2)
         limit = Circle(origin=np.array(pos[:2]), radius=1.0)
         self.kin_tree.add_node('table', link_obj=link_obj, area=area, limit=limit, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
         self.kin_tree.add_edge(global_frame, 'table')
@@ -394,7 +394,7 @@ class HumoroWorkspace(YamlWorkspace):
         '''
         Update workspace with human pos and movable objects (for now all are global coordinate)
         '''
-        if t <= self.duration:
+        if t < self.duration:
             human_pos = self.hr.get_human_pos_2d(self.segment, t)
             self.kin_tree.nodes[self.HUMAN_FRAME]['link_obj'] = OBJECT_MAP['human'](origin=np.array(human_pos))
         for obj in self.objects:

@@ -21,6 +21,7 @@ from lgp.experiment.pipeline import Experiment
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python test_lgp.py \"(\'p7_3\', 29439, 33249)\"')
 parser.add_argument('segment', help='The scenario name of the domain, problem file', type=str)
+parser.add_argument('-p', help='prediction', type=bool, default=False)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
 
@@ -28,15 +29,16 @@ domain_file = join(DATA_DIR, 'domain_set_table.pddl')
 robot_model_file = join(MODEL_DIR, 'pepper.urdf')
 start_time = time.time()
 segment = make_tuple(args.segment)
+sim_fps = 30 if args.p else 120 
 engine = HumoroDynamicLGP(domain_file=domain_file, robot_model_file=robot_model_file, path_to_mogaze=DATASET_DIR,
-                          enable_viewer=args.v, verbose=args.v)
-objects = engine.hr.get_object_carries(segment)
+                          sim_fps=sim_fps, prediction=args.p, enable_viewer=args.v, verbose=args.v)
+objects = engine.hr.get_object_carries(segment, predicting=False)
 start_agent_symbols = frozenset([('agent-avoid-human',), ('agent-free',)])
 end_agent_symbols = frozenset([('agent-at', 'table')])
 problem = Experiment.get_problem_from_segment(engine.hr, segment, engine.domain, objects, start_agent_symbols, end_agent_symbols)
 engine.init_planner(segment=segment, problem=problem, 
                     human_carry=3, trigger_period=10,
-                    human_freq='once', traj_init='nearest')
+                    human_freq='human-at', traj_init='outer')
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=True, sleep=False)
+engine.run(replan=False, sleep=False)
