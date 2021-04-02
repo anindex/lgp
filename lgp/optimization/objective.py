@@ -27,7 +27,7 @@ class TrajectoryConstraintObjective:
         # ipopt options
         self.ipopt_options = {
             'tol': kwargs.get('tol', 9e-3),
-            'acceptable_tol': kwargs.get('tol', 5e-3),
+            'acceptable_tol': kwargs.get('tol', 1e-2),
             'acceptable_constr_viol_tol': kwargs.get('acceptable_constr_viol_tol', 5e-1),
             'constr_viol_tol': kwargs.get('constr_viol_tol', 2e-2),
             'max_iter': kwargs.get('max_iter', 200),

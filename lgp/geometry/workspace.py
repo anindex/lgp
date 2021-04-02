@@ -276,7 +276,7 @@ class HumoroWorkspace(YamlWorkspace):
             fraction = 1.0
         else:
             fraction = self.hr.get_fraction_duration(self.segment, self.human_carry)
-        self.duration = int(round(self.hr.get_segment_timesteps(self.segment) * fraction))
+        self.duration = int(self.hr.get_segment_timesteps(self.segment) * fraction) + 1
         self.set_robot_geometric_state(self.INIT_ROBOT_POSE)  # reset initial robot pose
         self.constant_symbols = frozenset()
 

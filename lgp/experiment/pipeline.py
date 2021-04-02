@@ -50,20 +50,8 @@ class Experiment(object):
                 objects = self.engine.hr.get_object_carries(segment)
                 n_carries = len(objects)
                 if n_carries in self.total_pnp:
-                    init_pred = self.engine.hr.get_object_predicates(segment, 0)
-                    init_pred = [p for p in init_pred if p[1] in objects]
-                    final_pred = self.engine.hr.get_object_predicates(segment, segment[2] - segment[1] - 1)
-                    final_pred = [p for p in final_pred if p[1] in objects]
-                    # init problem
-                    problem = Problem()
-                    problem.name = str(segment)
-                    problem.domain_name = domain.name
-                    problem.objects = {'object': objects,  
-                                       'location': domain.constants['location']}
-                    problem.state = frozenset_of_tuples(init_pred).union(self.start_agent_symbols)
-                    problem.positive_goals = [frozenset_of_tuples(final_pred).union(self.end_agent_symbols)]
-                    problem.negative_goals = [frozenset()]
-                    self.segments[segment] = problem
+                    self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
+                                                                                 self.start_agent_symbols, self.end_agent_symbols)
     
     def save_data(self):
         with open(self.data_name, 'wb') as f:
@@ -86,3 +74,32 @@ class Experiment(object):
             data['dynamic_success'] = dynamic_success
             self.segment_data[segment] = data
             self.engine.reset_experiment()
+
+    @staticmethod
+    def get_problem_from_segment(hr, segment, domain, objects, start_agent_symbols, end_agent_symbols):
+        init_pred = hr.get_object_predicates(segment, 0)
+        init_pred = [p for p in init_pred if p[1] in objects]
+        final_pred = hr.get_object_predicates(segment, segment[2] - segment[1])
+        final_pred = [p for p in final_pred if p[1] in objects]
+        # resolve human-carry predicate
+        for p in final_pred:
+            if p[0] == 'human-carry':
+                final_pred.remove(p)
+                final_pred.append(('on', p[1], 'table'))  # assume on table at the end
+        for p in init_pred:
+            if p[0] == 'human-carry':
+                for pr in final_pred:
+                    if p[1] == pr[1]:
+                        init_pred.remove(p)
+                        init_pred.append(pr)
+                        break
+        # init problem
+        problem = Problem()
+        problem.name = str(segment)
+        problem.domain_name = domain.name
+        problem.objects = {'object': objects,  
+                           'location': domain.constants['location']}
+        problem.state = frozenset_of_tuples(init_pred).union(start_agent_symbols)
+        problem.positive_goals = [frozenset_of_tuples(final_pred).union(end_agent_symbols)]
+        problem.negative_goals = [frozenset()]
+        return problem

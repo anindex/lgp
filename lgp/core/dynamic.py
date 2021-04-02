@@ -194,12 +194,12 @@ class HumoroDynamicLGP(DynamicLGP):
                         self.humoro_lgp.act(sanity_check=False)
                 else:
                     self.humoro_lgp.act(sanity_check=False)
-                self.humoro_lgp.update_workspace()
                 # reflecting changes in PyBullet
                 self.update_visualization()
                 # recording paths
                 self.actual_robot_path.append(self.humoro_lgp.workspace.get_robot_geometric_state())
                 self.actual_human_path.append(self.humoro_lgp.workspace.get_human_geometric_state())
+            self.humoro_lgp.update_workspace()
             self.humoro_lgp.visualize()
             self.humoro_lgp.increase_timestep()
             if self.humoro_lgp.lgp_t > self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():

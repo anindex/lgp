@@ -33,8 +33,8 @@ class LogicPlanner(object):
     
     def load_cache(self):
         with open(self.cache_name, 'rb') as f:
-                data = pickle.load(f)
-                self.graph, self.goal_states = data['graph'], data['goals']
+            data = pickle.load(f)
+            self.graph, self.goal_states = data['graph'], data['goals']
 
     def save_cache(self):
         with open(self.cache_name, 'wb') as f:
