@@ -6,13 +6,13 @@ from multiprocessing.sharedctypes import Value, Array
 from ctypes import c_bool, c_double
 import operator
 from lgp.logic.planner import LogicPlanner
-from lgp.geometry.kinematics import Human, Robot, PointObject
+from lgp.geometry.kinematics import PointObject
 from lgp.geometry.workspace import YamlWorkspace, HumoroWorkspace
 from lgp.geometry.trajectory import linear_interpolation_waypoints_trajectory
 from lgp.geometry.geometry import get_closest_point_on_circle, get_point_on_circle
 from lgp.optimization.objective import TrajectoryConstraintObjective
 
-from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap, Workspace
+from pyrieef.geometry.workspace import SignedDistanceWorkspaceMap, Workspace, Circle
 from pyrieef.motion.trajectory import Trajectory, linear_interpolation_trajectory
 from pyrieef.geometry.pixel_map import sdf
 
@@ -172,7 +172,8 @@ class HumoroLGP(LGP):
         }
         # viewers
         if self.enable_viewer == True:
-            self.viewer = WorkspaceViewerServer(Workspace(), use_gl=False)
+            workspace = Workspace(box=self.workspace.box)
+            self.viewer = WorkspaceViewerServer(workspace)
 
     def init_planner(self, **kwargs):
         # LGP params
@@ -183,6 +184,7 @@ class HumoroLGP(LGP):
         self.human_freq = kwargs.get('human_freq', 40)  # human placement frequency according to fps
         self.traj_init = kwargs.get('traj_init', 'outer')  # initialization scheme for trajectory
         self.window_len = kwargs.get('window_len', 'max')  # frames, according to this sampling fps
+        self.full_replan = kwargs.get('full_replan', True)
         self.ratio = int(self.sim_fps / self.fps)
         # logic planner params
         problem = kwargs.get('problem')
@@ -376,7 +378,7 @@ class HumoroLGP(LGP):
         if ('agent-avoid-human',) in self.logic_planner.current_state:
             if self.human_freq == 'once':
                 human_pos = self.workspace.hr.get_human_pos_2d(self.workspace.segment, self.t)
-                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
+                self.workspace.obstacles[self.workspace.HUMAN_FRAME] = Circle(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
             elif self.human_freq == 'human-at':
                 for t in self.human_placements:
                     if t >= self.t:
@@ -388,7 +390,7 @@ class HumoroLGP(LGP):
                         if sim_t > self.workspace.duration:
                             break
                     human_pos = self.workspace.hr.get_human_pos_2d(self.workspace.segment, sim_t)
-                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
+                    self.workspace.obstacles[self.workspace.HUMAN_FRAME + str(sim_t)] = Circle(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
 
     def symbolic_plan(self, alternative=True, verify_plan=False):
         '''
@@ -489,9 +491,15 @@ class HumoroLGP(LGP):
             else:
                 HumoroLGP.logger.error(f'Traj init scheme {self.traj_init} not support!')
                 raise ValueError()
-            trajectory = linear_interpolation_trajectory(current, goal, t)
-            objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
-            objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
+            if self.full_replan:
+                waypoints, waypoint_manifolds = self.get_waypoints()
+                trajectory = linear_interpolation_waypoints_trajectory(waypoints)
+                objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
+                objective.set_problem(workspace=workspace, trajectory=trajectory, waypoint_manifolds=waypoint_manifolds, goal_manifold=waypoint_manifolds[-1][0])
+            else:
+                trajectory = linear_interpolation_trajectory(current, goal, t)
+                objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
+                objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
             if self.enable_viewer:
                 self.viewer.initialize_viewer(objective, objective.trajectory)
                 status = Value(c_bool, True)
@@ -527,9 +535,15 @@ class HumoroLGP(LGP):
                 else:
                     HumoroLGP.logger.error(f'Traj init scheme {self.traj_init} not support!')
                     raise ValueError()
-                trajectory = linear_interpolation_trajectory(current, goal, t)
-                objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
-                objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
+                if self.full_replan:
+                    waypoints, waypoint_manifolds = self.get_waypoints(plan)
+                    trajectory = linear_interpolation_waypoints_trajectory(waypoints)
+                    objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
+                    objective.set_problem(workspace=workspace, trajectory=trajectory, waypoint_manifolds=waypoint_manifolds, goal_manifold=waypoint_manifolds[-1][0])
+                else:
+                    trajectory = linear_interpolation_trajectory(current, goal, t)
+                    objective = TrajectoryConstraintObjective(dt=1/self.fps, enable_viewer=self.enable_viewer)
+                    objective.set_problem(workspace=workspace, trajectory=trajectory, goal_manifold=goal_manifold)
                 self.objectives.append(objective)
                 self.ranking.append((objective.cost(), i))
             # rank the plans
@@ -705,7 +719,7 @@ class HumoroLGP(LGP):
                     break
             if at and not prev_at:
                 human_pos = self.workspace.hr.get_human_pos_2d(self.workspace.segment, t)
-                self.human_placements[t] = Human(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
+                self.human_placements[t] = Circle(origin=human_pos, radius=self.workspace.HUMAN_RADIUS)
             prev_at = at
 
     def visualize(self):

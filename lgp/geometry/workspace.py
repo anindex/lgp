@@ -73,7 +73,7 @@ class YamlWorkspace(LGPWorkspace):
     SUPPORTED_PREDICATES = ('at', 'on', 'carry', 'free', 'avoid_human')
     DEDUCED_PREDICATES = ('at', 'on', 'carry', 'free')
     GLOBAL_FRAME = 'world'
-    INIT_ROBOT_POSE = np.array([0, -3.])
+    INIT_ROBOT_POSE = np.array([0, -1.5])
 
     def __init__(self, config=None, init_symbol=None, init=True, **kwargs):
         self.robots = {}

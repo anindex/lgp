@@ -38,7 +38,7 @@ end_agent_symbols = frozenset([('agent-at', 'table')])
 problem = Experiment.get_problem_from_segment(engine.hr, segment, engine.domain, objects, start_agent_symbols, end_agent_symbols)
 engine.init_planner(segment=segment, problem=problem, 
                     human_carry=3, trigger_period=10,
-                    human_freq='human-at', traj_init='outer')
+                    human_freq='once', traj_init='nearest')
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=False, sleep=False)
+engine.run(replan=True, sleep=True)

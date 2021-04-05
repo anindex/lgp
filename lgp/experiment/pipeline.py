@@ -35,7 +35,7 @@ class Experiment(object):
                                        sim_fps=sim_fps, prediction=prediction, verbose=self.verbose)
         # experiment params
         self.test_segments = kwargs.get('test_segments', None)  # test segments takes precedent
-        self.total_pnp = kwargs.get('total_pnp', [6, 7])
+        self.total_pnp = kwargs.get('total_pnp', [4, 5, 6, 7])
         self.taskid = kwargs.get('taskid', [2, 3])  # set table for 2, 3 people
         self.human_carry = kwargs.get('human_carry', 3)
         self.trigger_period = kwargs.get('trigger_period', 10)

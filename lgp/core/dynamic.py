@@ -187,7 +187,7 @@ class HumoroDynamicLGP(DynamicLGP):
                         for r in self.humoro_lgp.ranking:
                             if r[1] == self.humoro_lgp.chosen_plan_id:
                                 break
-                        n += 1
+                            n += 1
                         self.dynamic_num_failed_plans[self.humoro_lgp.lgp_t] = n
                     else:
                         self.dynamic_num_failed_plans[self.humoro_lgp.lgp_t] = len(self.humoro_lgp.ranking)
@@ -215,11 +215,11 @@ class HumoroDynamicLGP(DynamicLGP):
         if not replan:
             self.single_actual_path = self.actual_robot_path
             self.single_complete_time = self.humoro_lgp.lgp_t / self.humoro_lgp.sim_fps
-            self.single_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
+            self.single_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment, predicting=False)
         else:
             self.dynamic_actual_path = self.actual_robot_path
             self.dynamic_complete_time = self.humoro_lgp.lgp_t / self.humoro_lgp.sim_fps
-            self.dynamic_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment)
+            self.dynamic_reduction_ratio = self.humoro_lgp.lgp_t / self.hr.get_segment_timesteps(self.humoro_lgp.workspace.segment, predicting=False)
         if self.check_goal_reached():
             HumoroDynamicLGP.logger.info('Task complete successfully!')
             return True

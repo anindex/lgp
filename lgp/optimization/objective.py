@@ -116,6 +116,7 @@ class TrajectoryConstraintObjective:
         self.objective = self.problem.objective(self.q_init)
         if self.enable_viewer:
             self.obstacle_potential = self.problem.obstacle_potential()
+            print(self.obstacle_potential)
             self.problem.set_trajectory_publisher(False, self.delay_viewer)
 
     def cost(self, trajectory=None):
