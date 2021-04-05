@@ -24,6 +24,14 @@ def draw_trajectory(ax, traj, color, linewidth=1.0):
     ax.plot(traj.x()[x_idx], traj.x()[y_idx], color=color, linewidth=linewidth)
 
 
+def draw_numpy_trajectory(ax, traj, color, linewidth=1.0):
+    '''
+    This only support drawing 2D trajectory
+    '''
+    x, y = [p[0] for p in traj], [p[1] for p in traj]
+    ax.plot(x, y, color=color, linewidth=linewidth)
+
+
 def load_yaml_config(config_file):
         with open(config_file, 'r') as f:
             try:

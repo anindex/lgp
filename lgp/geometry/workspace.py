@@ -223,6 +223,7 @@ class YamlWorkspace(LGPWorkspace):
         self.draw_robot_paths(ax, show=False)
         if show:
             plt.show()
+        return ax
 
     def draw_robot_paths(self, ax, show=True):
         for frame, robot in self.robots.items():
