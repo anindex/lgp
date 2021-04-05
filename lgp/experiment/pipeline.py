@@ -3,6 +3,7 @@ import sys
 import os
 from os.path import dirname, realpath, join, expanduser
 import pickle
+import numpy as np
 from datetime import datetime
 
 from lgp.logic.problem import Problem
@@ -30,9 +31,9 @@ class Experiment(object):
         self.data_name = join(self.data_dir, self.task + str(datetime.now()))
         os.makedirs(self.data_dir, exist_ok=True)
         sim_fps = kwargs.get('sim_fps', 120)
-        prediction = kwargs.get('prediction', False)
+        self.prediction = kwargs.get('prediction', False)
         self.engine = HumoroDynamicLGP(domain_file=domain_file, robot_model_file=robot_model_file, path_to_mogaze=mogaze_dir, 
-                                       sim_fps=sim_fps, prediction=prediction, verbose=self.verbose)
+                                       sim_fps=sim_fps, prediction=self.prediction, verbose=self.verbose)
         # experiment params
         self.test_segments = kwargs.get('test_segments', None)  # test segments takes precedent
         self.total_pnp = kwargs.get('total_pnp', [4, 5, 6, 7])
@@ -46,22 +47,36 @@ class Experiment(object):
         self.segment_data = {}
 
     def get_segments(self):
+        task_overlap = []
         self.segments = {}
         domain = self.engine.humoro_lgp.logic_planner.domain
         if self.test_segments is None:
             for i in self.taskid:
                 segments = self.engine.hr.get_data_segments(taskid=i)
                 for segment in segments:
-                    objects = self.engine.hr.get_object_carries(segment)
+                    objects = self.engine.hr.get_object_carries(segment, predicting=False)
                     n_carries = len(objects)
+                    if not self.prediction:
+                        task_overlap.append(self.human_carry / n_carries)
+                    else:
+                        human_objects = set(self.engine.hr.get_object_carries(segment, predicting=True))
+                        task_objects = set(objects)
+                        task_overlap.append(len(human_objects.intersection(task_objects)) / len(human_objects.union(task_objects)))
                     if n_carries in self.total_pnp:
                         self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
                                                                                     self.start_agent_symbols, self.end_agent_symbols)
         else:
             for segment in self.test_segments:
                 objects = self.engine.hr.get_object_carries(segment, predicting=False)
+                if not self.prediction:
+                    task_overlap.append(self.human_carry / n_carries)
+                else:
+                    human_objects = set(self.engine.hr.get_object_carries(segment, predicting=True))
+                    task_objects = set(objects)
+                    task_overlap.append(len(human_objects.intersection(task_objects)) / len(human_objects.union(task_objects)))
                 self.segments[segment] = Experiment.get_problem_from_segment(self.engine.hr, segment, domain, objects,
                                                                              self.start_agent_symbols, self.end_agent_symbols)
+        Experiment.logger.info(f'Task IoU ratio: {np.mean(task_overlap)} +- {np.std(task_overlap)}')
     
     def save_data(self):
         with open(self.data_name, 'wb') as f:

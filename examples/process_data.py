@@ -15,7 +15,7 @@ from lgp.geometry.trajectory import compute_path_length
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python process_data.py data.p')
-parser.add_argument('--name', help='The scenario name of the domain, problem file', type=str, default='ground_truth.p')
+parser.add_argument('--name', help='The scenario name of the domain, problem file', type=str, default='prediction.p')
 args = parser.parse_args()
 data_file = join(DATA_DIR, args.name)
 
@@ -32,6 +32,7 @@ dynamic_path_reduction = []
 dynamic_solve_nlp = {}
 dynamic_geometric_plan_time = {}
 dynamic_geometric_plan_time_over_task = {}
+dynamic_path_len_over_task = {}
 for segment in data:
     print(segment)
     segment = data[segment]
@@ -64,9 +65,15 @@ for segment in data:
         if i not in dynamic_geometric_plan_time_over_task:
             dynamic_geometric_plan_time_over_task[i] = []
         dynamic_geometric_plan_time_over_task[i].append(segment['dynamic_geometric_plan_time'][t])
-
+    max_t = max(segment['dynamic_plans'].keys())
+    for t in segment['dynamic_plans']:
+        i = int(round(t / max_t * 10))
+        if i not in dynamic_path_len_over_task:
+            dynamic_path_len_over_task[i] = []
+        dynamic_path_len_over_task[i].append(len(segment['dynamic_plans'][t][0]))
 total_nlp_data = []
-index = [2, 4, 6, 8, 10, 12, 14, 16] 
+max_length = max(dynamic_geometric_plan_time.keys())
+index = list(range(2, max_length + 1, 2))
 for l in sorted(dynamic_solve_nlp):
     if l in index:
         total_nlp_data.append(dynamic_solve_nlp[l])
@@ -74,8 +81,10 @@ geo_time_data = []
 for l in sorted(dynamic_geometric_plan_time):
     if l in index:
         geo_time_data.append(dynamic_geometric_plan_time[l])
-del dynamic_geometric_plan_time[5], dynamic_geometric_plan_time[9]
-del dynamic_solve_nlp[5], dynamic_solve_nlp[9]
+dynamic_geometric_plan_time.pop(5, None)
+dynamic_geometric_plan_time.pop(9, None)
+dynamic_solve_nlp.pop(5, None)
+dynamic_solve_nlp.pop(9, None)
 print('Single plan: ')
 print(f'Success: {single_success / total}')
 print(f'Symbolic plan time: {np.mean(single_symbolic_plan_time)} +- {np.std(single_symbolic_plan_time)}')
@@ -95,6 +104,17 @@ ax.boxplot(data)
 ax.set_xticklabels(portion)
 ax.set_xlabel('Task progress ratio')
 ax.set_ylabel('Total solution time (s)')
+plt.show()
+
+portion = sorted([i / 10 for i in dynamic_path_len_over_task])
+portion.pop()
+data = [dynamic_path_len_over_task[i] for i in sorted(dynamic_path_len_over_task.keys())]
+data.pop()
+fig, ax = plt.subplots()
+ax.boxplot(data)
+ax.set_xticklabels(portion)
+ax.set_xlabel('Task progress ratio')
+ax.set_ylabel('Skeleton length')
 plt.show()
 
 fig, ax = plt.subplots()
