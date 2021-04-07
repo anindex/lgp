@@ -131,3 +131,4 @@ dmypy.json
 datasets/
 data/caches
 data/experiments
+data/videos

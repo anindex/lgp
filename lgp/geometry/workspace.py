@@ -3,6 +3,9 @@ import numpy as np
 import pybullet as p
 import networkx as nx
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 from collections import deque
 from pyrieef.geometry.pixel_map import PixelMap
 from pyrieef.geometry.workspace import Circle, Workspace
@@ -285,7 +288,7 @@ class HumoroWorkspace(YamlWorkspace):
         self.constant_symbols = frozenset_of_tuples(symbols)
     
     def set_robot_geometric_state(self, state):
-        self.kin_tree.nodes[self.robot_frame]['link_obj'] = OBJECT_MAP['robot'](origin=np.array(state))
+        self.kin_tree.nodes[self.robot_frame]['link_obj'] = OBJECT_MAP['robot'](origin=np.array(state), radius=0.1)
 
     def get_robot_geometric_state(self):
         return self.geometric_state[self.robot_frame]
@@ -328,13 +331,15 @@ class HumoroWorkspace(YamlWorkspace):
         self.hr.visualize_frame(self.segment, 0)
         self.clear_workspace()
         # obstables
+        i = 0
         for obj in self.hr.obstacles:
+            i += 1
             obj_id = self.hr.p._objects[obj]
             pos, _ = p.getBasePositionAndOrientation(obj_id)
             link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.20, .35]))
-            self.kin_tree.add_node(obj, link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., 1., .3, .1])
-            self.kin_tree.add_edge(global_frame, obj)
-            self.obstacles[obj] = Circle(origin=np.array(pos[:2]), radius=0.25)
+            self.kin_tree.add_node('chair' + str(i), link_obj=link_obj, type_obj='box_obj', movable=False, color=[1., .5, .25, 1.])
+            self.kin_tree.add_edge(global_frame, 'chair'+ str(i))
+            self.obstacles['chair' + str(i)] = Circle(origin=np.array(pos[:2]), radius=0.25)
         # table
         pos, _ = p.getBasePositionAndOrientation(self.hr.p._objects['table'])
         link_obj = OBJECT_MAP['box_obj'](origin=np.array(pos[:2]), dim=np.array([.8, .8]))
@@ -379,7 +384,7 @@ class HumoroWorkspace(YamlWorkspace):
         # human
         human_pos = self.hr.get_human_pos_2d(self.segment, 0)
         link_obj = OBJECT_MAP['human'](origin=np.array(human_pos))
-        self.kin_tree.add_node(self.HUMAN_FRAME, link_obj=link_obj, type_obj='human', movable=True, color=[0, 0, 1, 0.9])
+        self.kin_tree.add_node(self.HUMAN_FRAME, link_obj=link_obj, type_obj='human', movable=True, color=[1, 0, 0, 0.9])
         self.kin_tree.add_edge(global_frame, self.HUMAN_FRAME)
         # init geometric state
         self.update_geometric_state()

@@ -1,18 +1,24 @@
 import numpy as np
 import pybullet as p
 import time
+from datetime import datetime
 import logging
 from lgp.logic.parser import PDDLParser
 from lgp.core.planner import HumoroLGP
 from lgp.geometry.geometry import get_angle, get_point_on_circle
 from lgp.geometry.workspace import Circle
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # temporary importing until complication of install is resolve
 import os
 import sys
 _path_file = os.path.dirname(os.path.realpath(__file__))
+VIDEO_DIR = os.path.join(_path_file, '../../data/videos')
 sys.path.append(os.path.join(_path_file, "../../../humoro"))
 from examples.prediction.hmp_interface import HumanRollout
+from humoro.utility import storeimg
 
 
 class DynamicLGP(object):
@@ -48,6 +54,8 @@ class HumoroDynamicLGP(DynamicLGP):
         self.robot_frame = self.humoro_lgp.workspace.robot_frame
         self.handling_circle = Circle(np.zeros(2), radius=0.3)
         self.reset_experiment()
+        self.image_dir = os.path.join(VIDEO_DIR, str(datetime.now()))
+        os.makedirs(self.image_dir, exist_ok=True)
     
     def init_planner(self, **kwargs):
         if 'problem' not in kwargs:
@@ -145,7 +153,7 @@ class HumoroDynamicLGP(DynamicLGP):
                     handling_pos = get_point_on_circle(self.z_angle, self.handling_circle)
                     p.resetBasePositionAndOrientation(self.humoro_lgp.player._objects[obj], [*handling_pos, 1], [0, 0, 0, 1])  # TODO: for now attach object at robot origin
 
-    def run(self, replan=False, sleep=False):
+    def run(self, replan=False, sleep=False, save_frame=False):
         if not replan:
             self.humoro_lgp.update_current_symbolic_state()
             start_symbolic_plan = time.time()
@@ -179,6 +187,7 @@ class HumoroDynamicLGP(DynamicLGP):
                 success = self.humoro_lgp.geometric_replan()
                 self.dynamic_geometric_plan_time[self.humoro_lgp.lgp_t] = time.time() - start_geometric_plan
                 if self.humoro_lgp.lgp_t in self.dynamic_symbolic_plan_time:
+                    self.humoro_lgp.workspace.draw_workspace()
                     self.dynamic_chosen_plan_id[self.humoro_lgp.lgp_t] = self.humoro_lgp.chosen_plan_id
                     self.dynamic_plans[self.humoro_lgp.lgp_t] = self.humoro_lgp.get_list_plan_as_string()
                     self.dynamic_plan_costs[self.humoro_lgp.lgp_t] = self.humoro_lgp.ranking
@@ -205,6 +214,8 @@ class HumoroDynamicLGP(DynamicLGP):
                 self.actual_human_path.append(self.humoro_lgp.workspace.get_human_geometric_state())
             self.humoro_lgp.update_workspace()
             self.humoro_lgp.visualize()
+            if save_frame:
+                storeimg(p, os.path.join(self.image_dir, str(self.humoro_lgp.lgp_t) + '.png'))
             self.humoro_lgp.increase_timestep()
             if self.humoro_lgp.lgp_t > self.humoro_lgp.workspace.duration and self.humoro_lgp.symbolic_elapsed_t > self.humoro_lgp.get_current_plan_time():
                 break

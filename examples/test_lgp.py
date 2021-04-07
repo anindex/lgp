@@ -5,6 +5,10 @@ import yaml
 import logging
 from ast import literal_eval as make_tuple
 from os.path import join, dirname, abspath, expanduser
+import os
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,4 +45,4 @@ engine.init_planner(segment=segment, problem=problem,
                     human_freq='once', traj_init='nearest')
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=True, sleep=True)
+engine.run(replan=True, sleep=False, save_frame=False)

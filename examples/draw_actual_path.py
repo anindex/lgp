@@ -24,7 +24,8 @@ from examples.prediction.hmp_interface import HumanRollout
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Example run: python process_data.py data.p')
 parser.add_argument('--name', help='The scenario name of the domain, problem file', type=str, default='ground_truth.p')
-parser.add_argument('-s', help='The scenario name of the domain, problem file', type=str, default="(\'p7_3\', 29439, 33249)")
+parser.add_argument('-s', help='The scenario name of the domain, problem file', type=str, default="(\'p5_1\', 100648, 108344)")
+parser.add_argument('-m', help='Mode', type=str, default=0)
 args = parser.parse_args()
 data_file = join(DATA_DIR, args.name)
 
@@ -35,18 +36,21 @@ with open(data_file, 'rb') as f:
 hr = HumanRollout(path_to_mogaze=DATASET_DIR)
 ws = HumoroWorkspace(hr, robot_model_file=robot_model_file)
 ws.initialize_workspace_from_humoro(segment=segment, objects=[])
-meshgrid = ws.box.stacked_meshgrid(100)
-sdf_map = np.asarray(SignedDistanceWorkspaceMap(ws)(meshgrid))
-sdf_map = (sdf_map < 0).astype(float)
-signed_dist_field = np.asarray(sdf(sdf_map))
-signed_dist_field = np.flip(signed_dist_field, axis=0)
-signed_dist_field = np.interp(signed_dist_field, (signed_dist_field.min(), signed_dist_field.max()), (0, max(ws.box.dim)))
+if args.m == 1:
+    meshgrid = ws.box.stacked_meshgrid(100)
+    sdf_map = np.asarray(SignedDistanceWorkspaceMap(ws)(meshgrid))
+    sdf_map = (sdf_map < 0).astype(float)
+    signed_dist_field = np.asarray(sdf(sdf_map))
+    signed_dist_field = np.flip(signed_dist_field, axis=0)
+    signed_dist_field = np.interp(signed_dist_field, (signed_dist_field.min(), signed_dist_field.max()), (0, max(ws.box.dim)))
 
-fig = plt.figure(figsize=(8, 8))
-extents = ws.box.box_extent()
-ax = fig.add_subplot(111)
-im = ax.imshow(signed_dist_field, cmap='inferno', interpolation='nearest', extent=extents)
-fig.colorbar(im)
+    fig = plt.figure(figsize=(8, 8))
+    extents = ws.box.box_extent()
+    ax = fig.add_subplot(111)
+    im = ax.imshow(signed_dist_field, cmap='inferno', interpolation='nearest', extent=extents)
+    fig.colorbar(im)
+else:
+    ax = ws.draw_workspace(show=False)
 single_traj = data[segment]['single_actual_path']
 dynamic_traj = data[segment]['dynamic_actual_path']
 human_traj = data[segment]['human_path']

@@ -6,6 +6,9 @@ import pandas as pd
 from os.path import join, dirname, abspath, expanduser
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 ROOT_DIR = join(dirname(abspath(__file__)), '..')
 DATA_DIR = join(ROOT_DIR, 'data', 'experiments')
@@ -98,7 +101,9 @@ print(f'Task reduction: {np.mean(dynamic_reduction_ratio)} +- {np.std(dynamic_re
 print(f'Path reduction: {np.mean(dynamic_path_reduction)} +- {np.std(dynamic_path_reduction)}')
 
 portion = [i / 10 for i in dynamic_geometric_plan_time_over_task]
-data = dynamic_geometric_plan_time_over_task.values()
+portion.pop()
+data = list(dynamic_geometric_plan_time_over_task.values())
+data.pop()
 fig, ax = plt.subplots()
 ax.boxplot(data)
 ax.set_xticklabels(portion)
