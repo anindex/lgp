@@ -173,7 +173,7 @@ class HumoroLGP(LGP):
         # viewers
         if self.enable_viewer == True:
             workspace = Workspace(box=self.workspace.box)
-            self.viewer = WorkspaceViewerServer(workspace)
+            self.viewer = WorkspaceViewerServer(workspace, scale=130.)
 
     def init_planner(self, **kwargs):
         # LGP params

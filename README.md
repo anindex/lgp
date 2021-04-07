@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Also clone `bewego` into `hierarchical-hmp` folder:
 ```bash
 cd hierarchical-hmp
-git clone https://github.com/humans-to-robots-motion/bewego --recursive
+git clone https://github.com/anindex/bewego --recursive
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make
