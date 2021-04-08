@@ -23,8 +23,9 @@ from lgp.experiment.pipeline import Experiment
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                 description='Example run: python test_lgp.py \"(\'p7_3\', 29439, 33249)\"')
-parser.add_argument('segment', help='The scenario name of the domain, problem file', type=str)
+                                 description='Example run: python test_lgp.py --segment \"(\'p7_3\', 29439, 33249)\"')
+parser.add_argument('--segment', help='The scenario name of the domain, problem file', type=str, default="(\'p5_1\', 100648, 108344)")
+parser.add_argument('-d', help='dynamic', type=bool, default=False)
 parser.add_argument('-p', help='prediction', type=bool, default=False)
 parser.add_argument('-v', help='verbose', type=bool, default=False)
 args = parser.parse_args()
@@ -40,9 +41,11 @@ objects = engine.hr.get_object_carries(segment, predicting=False)
 start_agent_symbols = frozenset([('agent-avoid-human',), ('agent-free',)])
 end_agent_symbols = frozenset([('agent-at', 'table')])
 problem = Experiment.get_problem_from_segment(engine.hr, segment, engine.domain, objects, start_agent_symbols, end_agent_symbols)
+human_freq = 'once' if args.d else 'human-at'
+traj_init = 'nearest' if args.d else 'outer'
 engine.init_planner(segment=segment, problem=problem, 
                     human_carry=3, trigger_period=10,
-                    human_freq='once', traj_init='nearest')
+                    human_freq=human_freq, traj_init=traj_init)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=True, sleep=False, save_frame=False)
+engine.run(replan=args.d, sleep=False, save_frame=False)

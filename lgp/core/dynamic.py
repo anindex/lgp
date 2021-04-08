@@ -187,7 +187,6 @@ class HumoroDynamicLGP(DynamicLGP):
                 success = self.humoro_lgp.geometric_replan()
                 self.dynamic_geometric_plan_time[self.humoro_lgp.lgp_t] = time.time() - start_geometric_plan
                 if self.humoro_lgp.lgp_t in self.dynamic_symbolic_plan_time:
-                    self.humoro_lgp.workspace.draw_workspace()
                     self.dynamic_chosen_plan_id[self.humoro_lgp.lgp_t] = self.humoro_lgp.chosen_plan_id
                     self.dynamic_plans[self.humoro_lgp.lgp_t] = self.humoro_lgp.get_list_plan_as_string()
                     self.dynamic_plan_costs[self.humoro_lgp.lgp_t] = self.humoro_lgp.ranking

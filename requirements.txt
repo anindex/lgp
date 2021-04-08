@@ -3,4 +3,4 @@ networkx
 pyyaml
 pybullet
 qibullet
-git+git://github.com/humans-to-robots-motion/pyrieef
+git+git://github.com/anindex/pyrieef

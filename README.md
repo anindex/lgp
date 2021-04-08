@@ -49,13 +49,35 @@ python3 examples/init_pepper.py
 
 ## Usage
 
-For now, there are two example scenarios `set_table1` and `set_table2` using the same PDDL domain `domain_set_table.pddl`, which reside in `lgp/data/scenarios`. 
+To see an example of Dynamic LGP, please run:
 
-They are tested on MoGaze dataset segment 1. This runs `set_table1`:
-
-```bash
-cd lgp
-python3 examples/dynamic_lgp_humoro.py set_table -p 1 -v True
+```
+python3 examples/test_lgp.py -d True -v True -p False
 ```
 
-Change to `-p 2` to run `set_table2`. And `-v` is verbose flag. 
+where `-d` is the option to run in dynamic mode or not, `-v True` is to enable trajectory optimization visualization and `-p` is the option to enable human prediction.
+
+To run Dynamic LGP with human prediction, please use the following segment `('p2_1', 137536, 139256)`:
+
+```
+python3 examples/test_lgp.py --segment "('p2_1', 137536, 139256)" -d True -v True -p True
+```
+
+To reproduce the paper results, please run the following experiment scripts.
+- **Dynamic LGP with Human Ground Truth**:
+
+```
+python3 examples/experiment_ground_truth.py
+```
+
+- **Dynamic LGP with Long-term prediction**:
+
+```
+python3 examples/experiment_prediction.py
+```
+
+The experiment data will be saved in folder `lgp/data/experiments`. To visulize data result, please run:
+
+```
+python3 examples/process_data.py --name <your data>.p
+```
