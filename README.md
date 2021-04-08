@@ -76,7 +76,7 @@ python3 examples/experiment_ground_truth.py
 python3 examples/experiment_prediction.py
 ```
 
-The experiment data will be saved in folder `lgp/data/experiments`. To visulize data result, please run:
+The experiment data will be saved as pickle file in folder `lgp/data/experiments`, rename it to a more shorter name. To visulize data result, please run:
 
 ```
 python3 examples/process_data.py --name <your data>.p

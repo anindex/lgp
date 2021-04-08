@@ -48,4 +48,4 @@ engine.init_planner(segment=segment, problem=problem,
                     human_freq=human_freq, traj_init=traj_init)
 init_time = time.time()
 print('Init time: ' + str(init_time - start_time) + 's')
-engine.run(replan=args.d, sleep=False, save_frame=False)
+engine.run(replan=args.d, sleep=True, save_frame=False)
