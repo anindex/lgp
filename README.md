@@ -27,8 +27,9 @@ Also clone `bewego` into `hierarchical-hmp` folder:
 ```bash
 cd hierarchical-hmp
 git clone https://github.com/anindex/bewego --recursive
+cd bewego
 mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_IPOPT=True -DPYBIND11_PYTHON_VERSION=3.5
 make
 make install
 ```
