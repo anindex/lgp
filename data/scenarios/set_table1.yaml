@@ -1,0 +1,43 @@
+# Rules:
+#   - all coordinates are as format [x, y]
+#   - 'world' is always the root of the workspace
+#   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
+#   - color is as format rgba
+# TODO: maybe implement x, y, phi kinematic later if needed
+lgp:
+  name: 'set_table1'
+  task_id: 2
+  segment_id: 17
+  window_len: 'max'
+  sim_fps: 120
+  fps: 10
+  human_freq: 'human-at'
+  traj_init: 'outer'  # nearest | outer
+  trigger_period: 10
+  timeout: 200
+  enable_viewer: True
+
+workspace:
+  human_carry: 'all'
+  tree:
+    world:
+      origin: [0., 0.]
+      geometry: 
+        dim: [7., 7.]
+      property:
+        type_obj: 'env'
+        color: [1, 1, 1, 1]
+        movable: False
+      children:
+        - robot:
+            origin: [0., -3]
+            geometry:
+              radius: 0.2
+            property:
+              type_obj: 'robot'
+              color: [0, 1, 0, 1]
+              movable: True
+            children:
+
+logic:
+  ignore_cache: False

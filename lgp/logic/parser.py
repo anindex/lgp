@@ -1,7 +1,7 @@
 import logging
 import re
 
-from lgp.logic.action import Action
+from lgp.logic.action import Action, DurativeAction
 from lgp.logic.domain import Domain
 from lgp.logic.problem import Problem
 from lgp.utils.helpers import frozenset_of_tuples
@@ -60,9 +60,14 @@ class PDDLParser(object):
                 elif t == ':types':
                     domain.types = PDDLParser.parse_hierarchy(group, t)
                 elif t == ':predicates':
-                    domain.predicates = PDDLParser.parse_predicates(group)
+                    domain.predicates = PDDLParser.parse_functions(group)
+                elif t == ':functions':
+                    domain.functions = PDDLParser.parse_functions(group)
                 elif t == ':action':
                     act = PDDLParser.parse_action(group)
+                    domain.actions[act.name] = act
+                elif t == ':durative-action':
+                    act = PDDLParser.parse_durative_action(group)
                     domain.actions[act.name] = act
                 else:
                     domain.extensions = PDDLParser.parse_domain_extended(group, t)
@@ -92,9 +97,9 @@ class PDDLParser(object):
                 elif t == ':init':
                     problem.state = frozenset_of_tuples(group)
                 elif t == ':goal':
-                    positive_goals, negative_goals = PDDLParser.split_predicates(group[0], '', 'goals')
-                    problem.positive_goals = frozenset_of_tuples(positive_goals)
-                    problem.negative_goals = frozenset_of_tuples(negative_goals)
+                    positive_goals, negative_goals = PDDLParser.parse_goal(group[0])
+                    problem.positive_goals = [frozenset_of_tuples(goal) for goal in positive_goals]
+                    problem.negative_goals = [frozenset_of_tuples(goal) for goal in negative_goals]
                 else:
                     problem.extensions = PDDLParser.parse_problem_extended(group, t)
         else:
@@ -150,6 +155,30 @@ class PDDLParser(object):
         return action
 
     @staticmethod
+    def parse_durative_action(group):
+        name = group.pop(0)
+        if type(name) is not str:
+            raise Exception('Action without name definition')
+        action = DurativeAction(name=name)
+        while group:
+            t = group.pop(0)
+            if t == ':parameters':
+                action.parameters = PDDLParser.parse_action_parameters(group.pop(0), name)
+            elif t == ':duration':
+                action.duration = group.pop(0)[2]
+            elif t == ':precondition':
+                start_positive, start_negative, end_positive, end_negative = PDDLParser.split_durative_predicates(group.pop(0), name, ' preconditions')
+                action.start_positive_preconditions, action.start_negative_preconditions = frozenset_of_tuples(start_positive), frozenset_of_tuples(start_negative)
+                action.end_positive_preconditions, action.end_negative_preconditions = frozenset_of_tuples(end_positive), frozenset_of_tuples(end_negative)
+            elif t == ':effect':
+                start_positive, start_negative, end_positive, end_negative = PDDLParser.split_durative_predicates(group.pop(0), name, ' effects')
+                action.start_add_effects, action.start_del_effects = frozenset_of_tuples(start_positive), frozenset_of_tuples(start_negative)
+                action.end_add_effects, action.end_del_effects = frozenset_of_tuples(end_positive), frozenset_of_tuples(end_negative)
+            else:
+                action.extensions[t] = PDDLParser.parse_action_extended(group.pop(0), t)
+        return action
+
+    @staticmethod
     def parse_action_parameters(group, name):
         parameters = []
         untyped_parameters = []
@@ -179,12 +208,12 @@ class PDDLParser(object):
         return None
 
     @staticmethod
-    def parse_predicates(group):
-        predicates = {}
+    def parse_functions(group):
+        functions = {}
         for pred in group:
-            predicate_name = pred.pop(0)
-            if predicate_name in predicates:
-                raise Exception('Predicate ' + predicate_name + ' redefined')
+            function_name = pred.pop(0)
+            if function_name in functions:
+                raise Exception('Predicate or function ' + function_name + ' redefined')
             arguments = {}
             untyped_variables = []
             while pred:
@@ -199,13 +228,15 @@ class PDDLParser(object):
                     untyped_variables.append(t)
             while untyped_variables:
                 arguments[untyped_variables.pop(0)] = 'object'
-            predicates[predicate_name] = arguments
-        return predicates
+            functions[function_name] = arguments
+        return functions
 
     @staticmethod
     def split_predicates(group, name, part):
-        negative = []
+        if not group:
+            return [], []
         positive = []
+        negative = []
         if group[0] == 'and':
             group.pop(0)
         else:
@@ -218,3 +249,48 @@ class PDDLParser(object):
             else:
                 positive.append(predicate)
         return positive, negative
+    
+    @staticmethod
+    def split_durative_predicates(group, name, part):
+        if not group:
+            return [], [], [], []
+        start_positive, start_negative = [], []
+        end_positive, end_negative = [], []
+        if group[0] == 'and':
+            group.pop(0)
+        else:
+            group = [group]
+        for predicate in group:
+            if predicate[1] == 'start':
+                if predicate[2][0] == 'not':
+                    if len(predicate[2]) != 2:
+                        raise Exception('Unexpected not in ' + name + part)
+                    start_negative.append(predicate[2][-1])
+                else:
+                    start_positive.append(predicate[2])
+            elif predicate[1] == 'end':
+                if predicate[2][0] == 'not':
+                    if len(predicate[2]) != 2:
+                        raise Exception('Unexpected not in ' + name + part)
+                    end_negative.append(predicate[2][-1])
+                else:
+                    end_positive.append(predicate[2])
+            else:
+                raise Exception('Unexpected time tag in ' + name + part)
+        return start_positive, start_negative, end_positive, end_negative
+    
+    @staticmethod
+    def parse_goal(group):
+        if not group:
+            return [], []
+        positives = []
+        negatives = []
+        if group[0] == 'or':
+            group.pop(0)
+        else:
+            group = [group]
+        for case in group:
+            positive, negative = PDDLParser.split_predicates(case, '', 'goals')
+            positives.append(positive)
+            negatives.append(negative)
+        return positives, negatives

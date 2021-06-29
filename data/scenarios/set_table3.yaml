@@ -1,0 +1,16 @@
+# Rules:
+#   - all coordinates are as format [x, y]
+#   - 'world' is always the root of the workspace
+#   - geometry data is defined based on type, e.g. box has dim [1, 1], circle has radius [0.2]
+#   - color is as format rgba
+name: 'set_table3'
+segment: ['p2_1', 56805, 62201]
+window_len: 'max'
+sim_fps: 120
+fps: 10
+human_freq: 'once'  # human-at | once | 40 (int)
+traj_init: 'nearest'  # nearest | outer
+trigger_period: 10
+timeout: 500
+ignore_cache: False
+human_carry: 4

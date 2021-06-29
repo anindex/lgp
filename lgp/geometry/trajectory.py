@@ -1,3 +1,4 @@
+import numpy as np
 from pyrieef.motion.trajectory import Trajectory
 
 
@@ -14,3 +15,12 @@ def linear_interpolation_waypoints_trajectory(waypoints):
             trajectory.configuration(t + t_total)[:] = (1 - alpha) * q_init + alpha * q_goal
         t_total += t_segment
     return trajectory
+
+
+def compute_path_length(path):
+    if path is None or len(path) <= 1:
+        return 0.
+    length = 0.
+    for i in range(len(path) - 1):
+        length += np.linalg.norm(path[i + 1] - path[i])
+    return length

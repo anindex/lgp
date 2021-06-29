@@ -10,7 +10,7 @@ sys.path.append(ROOT_DIR)
 from lgp.geometry.workspace import LGPWorkspace  # noqa
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                 description='Example run: python load_workspace.py prepare_meal.yaml')
+                                 description='Example run: python load_workspace.py set_table.yaml')
 parser.add_argument('yaml_file', help='The world URDF file', type=str)
 args = parser.parse_args()
 
